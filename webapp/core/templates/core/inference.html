@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+{% block title %}Inference{% endblock %}
+{% block content %}
+<h1>Run inference</h1>
+
+{% if no_checkpoints %}
+  <p class="muted">No checkpoints yet — start and finish a training run first.</p>
+{% else %}
+<form method="post" enctype="multipart/form-data" class="card">
+  {% csrf_token %}
+  {% for field in form %}
+    <div class="field">
+      {{ field.label_tag }}
+      {{ field }}
+      {{ field.errors }}
+    </div>
+  {% endfor %}
+  <button type="submit">Predict</button>
+</form>
+
+{% if result %}
+<div class="card">
+  <strong>Predictions</strong>
+  <table>
+    <thead><tr><th>Label</th><th>Probability</th></tr></thead>
+    <tbody>
+      {% for label, prob in result %}
+      <tr><td>{{ label }}</td><td>{{ prob|floatformat:1 }}%</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if scene_result %}
+<div class="card">
+  <strong>Per-person timeline</strong> — one row per tracked person, per time window.
+  <table>
+    <thead><tr><th>Person</th><th>Frames</th><th>Label</th><th>Confidence</th></tr></thead>
+    <tbody>
+      {% for window in scene_result %}
+      <tr>
+        <td>#{{ window.track_id }}</td>
+        <td>{{ window.start_frame }}&ndash;{{ window.end_frame }}</td>
+        <td>{{ window.label }}</td>
+        <td>{{ window.confidence|floatformat:1 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif scene_result is not None %}
+<p class="muted">No people were detected/tracked in this video.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

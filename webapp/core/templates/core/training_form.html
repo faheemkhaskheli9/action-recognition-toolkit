@@ -1,0 +1,19 @@
+{% extends "core/base.html" %}
+{% block title %}Start training{% endblock %}
+{% block content %}
+<h1>Start a training run</h1>
+
+<form method="post" class="card">
+  {% csrf_token %}
+  {% for field in form %}
+    <div class="field">
+      {{ field.label_tag }}
+      {{ field }}
+      {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+      {{ field.errors }}
+    </div>
+  {% endfor %}
+  <button type="submit">Start run</button>
+</form>
+<p class="muted">Runs launch as a background process; you'll be redirected to its live log.</p>
+{% endblock %}

@@ -1,0 +1,18 @@
+# Baseline architecture — cheapest to train, good starting point for small datasets.
+data:
+  manifest: data/manifest.csv
+  num_frames: 16
+  image_size: 112
+  batch_size: 8
+
+model:
+  name: cnn_lstm
+  params:
+    hidden_size: 256
+    num_layers: 1
+    pretrained_backbone: true
+
+train:
+  epochs: 20
+  lr: 0.0001
+  output_dir: runs/cnn_lstm

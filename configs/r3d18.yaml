@@ -1,0 +1,17 @@
+# 3D CNN — models motion directly via spatiotemporal convolutions, Kinetics-pretrained.
+# Heavier than cnn_lstm; a smaller batch size is often needed on limited GPU memory.
+data:
+  manifest: data/manifest.csv
+  num_frames: 16
+  image_size: 112
+  batch_size: 4
+
+model:
+  name: r3d18
+  params:
+    pretrained: true
+
+train:
+  epochs: 20
+  lr: 0.00005
+  output_dir: runs/r3d18

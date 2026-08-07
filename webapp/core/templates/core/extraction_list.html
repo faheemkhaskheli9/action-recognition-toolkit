@@ -1,0 +1,27 @@
+{% extends "core/base.html" %}
+{% block title %}Extraction runs{% endblock %}
+{% block content %}
+<h1>Track extraction runs</h1>
+<p><a href="{% url 'core:start_extraction' %}" class="btn">+ New extraction</a></p>
+
+{% if runs %}
+<table>
+  <thead>
+    <tr><th>Name</th><th>Video dir</th><th>Status</th><th>Started</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for run in runs %}
+    <tr>
+      <td>{{ run.name }}</td>
+      <td>{{ run.video_dir }}</td>
+      <td><span class="status-pill status-{{ run.status }}">{{ run.get_status_display }}</span></td>
+      <td>{{ run.created_at }}</td>
+      <td><a href="{% url 'core:extraction_detail' run.pk %}">View</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="muted">No extraction runs yet.</p>
+{% endif %}
+{% endblock %}

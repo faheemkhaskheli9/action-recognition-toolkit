@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# datasets and labeling outputs — keep the repo code-only
+data/**
+!data/README.md
+!data/.gitkeep
+
+# training outputs
+runs/
+checkpoints/
+*.pt
+*.pth
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Django webapp
+webapp/db.sqlite3
+webapp/media/

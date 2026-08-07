@@ -1,0 +1,27 @@
+{% extends "core/base.html" %}
+{% block title %}Training runs{% endblock %}
+{% block content %}
+<h1>Training runs</h1>
+<p><a href="{% url 'core:start_training' %}" class="btn">+ New run</a></p>
+
+{% if runs %}
+<table>
+  <thead>
+    <tr><th>Name</th><th>Model</th><th>Status</th><th>Started</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for run in runs %}
+    <tr>
+      <td>{{ run.name }}</td>
+      <td>{{ run.model_name }}</td>
+      <td><span class="status-pill status-{{ run.status }}">{{ run.get_status_display }}</span></td>
+      <td>{{ run.created_at }}</td>
+      <td><a href="{% url 'core:run_detail' run.pk %}">View</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="muted">No training runs yet.</p>
+{% endif %}
+{% endblock %}
