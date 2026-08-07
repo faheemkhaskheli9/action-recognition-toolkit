@@ -1,0 +1,26 @@
+{% extends "core/base.html" %}
+{% block title %}Extract tracks{% endblock %}
+{% block content %}
+<h1>Detect + track people in raw video</h1>
+<p class="muted">
+  Turns a folder of raw multi-person videos into single-person clips (one
+  file per tracked person, per short time window) under
+  <code>data/tracks/&lt;name&gt;/</code> — point the Label page at that
+  folder afterwards to label them with whatever taxonomy fits your
+  scenario, then train as usual.
+</p>
+
+<form method="post" class="card">
+  {% csrf_token %}
+  {% for field in form %}
+    <div class="field">
+      {{ field.label_tag }}
+      {{ field }}
+      {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
+      {{ field.errors }}
+    </div>
+  {% endfor %}
+  <button type="submit">Start extraction</button>
+</form>
+<p class="muted">Runs launch as a background process; you'll be redirected to its live log.</p>
+{% endblock %}

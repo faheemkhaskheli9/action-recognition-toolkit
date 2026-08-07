@@ -1,0 +1,116 @@
+:root {
+  color-scheme: light dark;
+  --border: #d8dee4;
+  --muted: #6a7381;
+  --accent: #2f6fed;
+  --bg-soft: #f5f7fa;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  color: #1c2530;
+  background: #fff;
+}
+
+nav {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 0.9rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+
+nav a {
+  color: #1c2530;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+nav a:hover { color: var(--accent); }
+
+nav .brand { font-weight: 700; margin-right: 0.5rem; }
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+}
+
+h1 { margin-top: 0; }
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.muted { color: var(--muted); font-size: 0.9rem; }
+
+.messages { list-style: none; padding: 0; margin: 0 0 1rem; }
+.messages li {
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+.messages .success { background: #e4f6ea; color: #196c33; }
+.messages .error { background: #fbe6e6; color: #a5241b; }
+
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
+
+input[type=text], input[type=number], input[type=file], select {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  width: 100%;
+}
+
+label { display: block; font-weight: 600; margin-bottom: 0.3rem; font-size: 0.9rem; }
+.field { margin-bottom: 0.9rem; }
+.field .helptext { color: var(--muted); font-size: 0.8rem; margin-top: 0.2rem; }
+.field .errorlist { color: #a5241b; font-size: 0.85rem; list-style: none; padding: 0; margin: 0.2rem 0 0; }
+
+button, .btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+button.secondary, .btn.secondary { background: #566072; }
+button:disabled { background: #a9b2bf; cursor: not-allowed; }
+
+.status-pill {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.status-running { background: #fff3d6; color: #8a6300; }
+.status-succeeded { background: #e4f6ea; color: #196c33; }
+.status-failed { background: #fbe6e6; color: #a5241b; }
+
+pre.log {
+  background: #10151d;
+  color: #d6e0ea;
+  padding: 1rem;
+  border-radius: 8px;
+  max-height: 420px;
+  overflow: auto;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+}
+
+video { max-width: 100%; border-radius: 8px; background: #000; }

@@ -1,0 +1,22 @@
+# Every field here is the built-in default; a config file only needs to
+# list what it wants to change. Used by `ar-extract-tracks` and (for its
+# detector/tracker sections) `ar-predict-scene`.
+
+detector:
+  name: fasterrcnn              # see action_recognition.tracking.detectors.available_detectors()
+  params:
+    score_thresh: 0.6            # minimum detection confidence kept as a person box
+
+tracker:
+  name: iou                     # see action_recognition.tracking.trackers.available_trackers()
+  params:
+    iou_thresh: 0.3              # minimum box overlap to match a detection to an existing track
+    max_age: 15                  # frames (in detector-stride units) a track survives with no match before closing
+
+extract:
+  frame_stride: 2                # run the detector every Nth raw video frame
+  window_frames: 16              # frames per output clip, before downstream re-sampling to num_frames
+  stride_frames: 8                # overlap between consecutive windows cut from the same track
+  min_track_frames: 16            # tracks/windows shorter than this are dropped
+  crop_padding: 0.2               # fraction of box size added on each side before cropping
+  output_size: 224                # cropped clips are resized to output_size x output_size

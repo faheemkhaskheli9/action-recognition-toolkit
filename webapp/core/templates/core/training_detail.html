@@ -1,0 +1,43 @@
+{% extends "core/base.html" %}
+{% block title %}{{ run.name }}{% endblock %}
+{% block content %}
+<h1>{{ run.name }}</h1>
+<p>
+  <span class="status-pill status-{{ run.status }}" id="status-pill">{{ run.get_status_display }}</span>
+  <span class="muted">model={{ run.model_name }} config={{ run.config_path }} pid={{ run.pid }}</span>
+</p>
+
+{% if checkpoints %}
+<div class="card">
+  <strong>Checkpoints</strong>
+  <ul>
+    {% for name, path in checkpoints.items %}
+      <li>{{ name }} &mdash; <span class="muted">{{ path }}</span></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2>Log</h2>
+<pre class="log" id="log">{{ log_tail }}</pre>
+
+{% if run.status == "running" %}
+<script>
+  const logEl = document.getElementById("log");
+  const pillEl = document.getElementById("status-pill");
+  async function poll() {
+    const res = await fetch("{% url 'core:run_log_partial' run.pk %}");
+    const data = await res.json();
+    logEl.textContent = data.log_tail;
+    logEl.scrollTop = logEl.scrollHeight;
+    if (data.status !== "running") {
+      pillEl.textContent = data.status;
+      pillEl.className = "status-pill status-" + data.status;
+      return;
+    }
+    setTimeout(poll, 3000);
+  }
+  setTimeout(poll, 3000);
+</script>
+{% endif %}
+{% endblock %}

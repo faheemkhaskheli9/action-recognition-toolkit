@@ -1,0 +1,107 @@
+{% extends "core/base.html" %}
+{% block title %}Dataset{% endblock %}
+{% block content %}
+<h1>Dataset</h1>
+<p class="muted">
+  Upload videos, see what's in your dataset, and fix labels — all in one place.
+  Prefer labeling one at a time? Use the
+  <a href="{% url 'core:label_videos' %}?video_dir={{ video_dir|urlencode }}&manifest_path={{ manifest_path|urlencode }}">Label</a> page.
+</p>
+
+<div class="card">
+  <form method="get">
+    <div class="field">
+      <label>Video folder</label>
+      <input type="text" name="video_dir" value="{{ video_dir }}">
+    </div>
+    <div class="field">
+      <label>Manifest file</label>
+      <input type="text" name="manifest_path" value="{{ manifest_path }}">
+    </div>
+    <button type="submit">Use this folder</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Upload videos</h2>
+  <form method="post" action="{% url 'core:upload_videos' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="video_dir" value="{{ video_dir }}">
+    <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
+    <div class="field">
+      <label>Video file(s)</label>
+      <input type="file" name="videos" accept=".mp4,.avi,.mov,.mkv,.webm" multiple required>
+      <p class="helptext">Saved into {{ video_dir }}.</p>
+    </div>
+    <div class="field">
+      <label>Label (optional)</label>
+      <input type="text" name="label" list="known-labels" placeholder="Leave blank to label later, below or on the Label page">
+      <datalist id="known-labels">
+        {% for label in known_labels %}<option value="{{ label }}">{% endfor %}
+      </datalist>
+    </div>
+    <button type="submit">Upload</button>
+  </form>
+</div>
+
+{% if missing_dir %}
+  <p class="muted">{{ video_dir }} doesn't exist yet — upload a video above to create it.</p>
+{% else %}
+  <p class="muted">
+    {{ total }} video{{ total|pluralize }} in {{ video_dir }} &mdash;
+    {{ labeled_count }} labeled, {{ unlabeled_count }} unlabeled.
+    {% if label_counts %}
+      (
+      {% for label, count in label_counts %}{{ label }}: {{ count }}{% if not forloop.last %}, {% endif %}{% endfor %}
+      )
+    {% endif %}
+  </p>
+
+  {% if rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Video</th>
+        <th>Label</th>
+        <th>Delete</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>
+          <a href="{% url 'core:serve_video' %}?path={{ row.path|urlencode }}" target="_blank">{{ row.name }}</a>
+          {% if row.split %}<br><span class="muted">split: {{ row.split }}</span>{% endif %}
+          {% if not row.labeled %}<br><span class="muted">unlabeled</span>{% endif %}
+        </td>
+        <td>
+          <form method="post" action="{% url 'core:update_label' %}" style="display:flex; gap:.5rem; align-items:flex-start;">
+            {% csrf_token %}
+            <input type="hidden" name="video_path" value="{{ row.path }}">
+            <input type="hidden" name="video_dir" value="{{ video_dir }}">
+            <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
+            <input type="text" name="label" value="{{ row.label }}" list="known-labels" placeholder="unlabeled" required>
+            <button type="submit">Save</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="{% url 'core:delete_entry' %}" onsubmit="return confirm('Remove {{ row.name }} from the dataset?');">
+            {% csrf_token %}
+            <input type="hidden" name="video_path" value="{{ row.path }}">
+            <input type="hidden" name="video_dir" value="{{ video_dir }}">
+            <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
+            <label class="muted" style="display:flex; align-items:center; gap:.35rem; font-weight:400;">
+              <input type="checkbox" name="delete_file" style="width:auto;"> also delete file
+            </label>
+            <button type="submit" class="secondary">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted">No videos yet — upload some above.</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

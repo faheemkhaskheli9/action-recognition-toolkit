@@ -1,0 +1,59 @@
+{% extends "core/base.html" %}
+{% block title %}Label videos{% endblock %}
+{% block content %}
+<h1>Label your action recognition dataset</h1>
+<p class="muted">
+  No videos here yet? Upload some on the <a href="{% url 'core:dataset_list' %}?video_dir={{ video_dir|urlencode }}&manifest_path={{ manifest_path|urlencode }}">Dataset</a> page first.
+</p>
+
+<div class="card">
+  <form method="get">
+    <div class="field">
+      <label>Video folder</label>
+      <input type="text" name="video_dir" value="{{ video_dir }}">
+    </div>
+    <div class="field">
+      <label>Manifest file</label>
+      <input type="text" name="manifest_path" value="{{ manifest_path }}">
+    </div>
+    <button type="submit">Use this folder</button>
+  </form>
+</div>
+
+{% if missing_dir %}
+  <p class="muted">Folder not found: {{ video_dir }}. Point it at a folder containing your video files.</p>
+{% else %}
+  <p class="muted">{{ labeled_count }} / {{ total }} labeled</p>
+
+  {% if current %}
+    <div class="card">
+      <h2>{{ current_name }}</h2>
+      <video controls src="{% url 'core:serve_video' %}?path={{ current|urlencode }}"></video>
+
+      <form method="post" action="{% url 'core:save_label' %}" style="margin-top:1rem;">
+        {% csrf_token %}
+        <input type="hidden" name="video_path" value="{{ current }}">
+        <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
+        <div class="field">
+          <label>Label</label>
+          <input type="text" name="label" list="known-labels" placeholder="Pick an existing label or type a new one" required>
+          <datalist id="known-labels">
+            {% for label in known_labels %}
+              <option value="{{ label }}">
+            {% endfor %}
+          </datalist>
+        </div>
+        <button type="submit">Save & next</button>
+      </form>
+
+      <form method="post" action="{% url 'core:skip_video' %}" style="display:inline;">
+        {% csrf_token %}
+        <input type="hidden" name="video_path" value="{{ current }}">
+        <button type="submit" class="secondary">Skip for now</button>
+      </form>
+    </div>
+  {% else %}
+    <p>Every video in this folder has a label. Switch to Review to edit, or point at a new folder.</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

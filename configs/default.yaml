@@ -1,0 +1,21 @@
+# Every field here is the built-in default; a config file only needs to list
+# what it wants to change. CLI flags (--epochs, --lr, ...) override this file.
+
+data:
+  manifest: data/manifest.csv   # produced by the labeling app or build_manifest + split_dataset
+  num_frames: 16                # frames sampled per clip, uniformly across its duration
+  image_size: 112                # frames are resized/cropped to image_size x image_size
+  batch_size: 8
+  num_workers: 2
+
+model:
+  name: cnn_lstm                # one of: cnn_lstm, r3d18 (see `ar-train --help` / models/registry.py)
+  params: {}                    # forwarded as kwargs to the model's __init__
+
+train:
+  epochs: 20
+  lr: 0.0001
+  weight_decay: 0.0001
+  seed: 42
+  output_dir: runs/exp1         # best.pt / last.pt checkpoints are written here
+  device: null                  # null autodetects cuda > mps > cpu
