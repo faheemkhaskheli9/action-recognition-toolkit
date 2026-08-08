@@ -40,6 +40,11 @@ def launch_detached(argv: list[str], *, log_file: Path, exit_marker_prefix: str,
     once it exits a line `{exit_marker_prefix}{returncode}` is appended to
     that same file. Returns the new process's pid.
     """
+    # Create it up front (then close immediately -- the child re-opens it by
+    # path) so callers can rely on the file existing as soon as this returns,
+    # not just once the detached process gets around to writing to it.
+    open(log_file, "w").close()
+
     if os.name == "nt":
         inner = subprocess.list2cmdline(argv)
         quoted_log = f'"{log_file}"'

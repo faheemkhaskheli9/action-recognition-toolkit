@@ -32,11 +32,6 @@ def test_run_dir_joins_name_under_runs_dir(settings, tmp_path):
 # start_run
 # --------------------------------------------------------------------- #
 
-class _FakeProcess:
-    def __init__(self, pid=4242):
-        self.pid = pid
-
-
 @pytest.mark.django_db
 def test_start_run_creates_log_dir_and_training_run_row(settings, tmp_path, monkeypatch):
     settings.RUNS_DIR = tmp_path / "runs"
@@ -44,12 +39,15 @@ def test_start_run_creates_log_dir_and_training_run_row(settings, tmp_path, monk
 
     captured = {}
 
-    def fake_popen(argv, **kwargs):
+    def fake_launch_detached(argv, **kwargs):
         captured["argv"] = argv
         captured["kwargs"] = kwargs
-        return _FakeProcess(pid=1234)
+        # launch_detached normally creates the log file itself; the fake
+        # stands in for that too so callers can rely on it existing.
+        kwargs["log_file"].touch()
+        return 1234
 
-    monkeypatch.setattr(training_service.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(training_service._background, "launch_detached", fake_launch_detached)
 
     run = training_service.start_run(
         name="exp1",
@@ -66,19 +64,19 @@ def test_start_run_creates_log_dir_and_training_run_row(settings, tmp_path, monk
     assert run.status == TrainingRun.Status.RUNNING
     assert run.pid == 1234
     assert (settings.RUNS_DIR / "exp1").is_dir()
-    assert Path(run.log_file).exists()  # log file is created even though Popen is faked
+    assert Path(run.log_file).exists()
 
-    # the underlying `ar-train` invocation is wrapped in `bash -c "<command>"`
-    assert captured["argv"][:2] == ["bash", "-c"]
-    command = captured["argv"][2]
-    assert "action_recognition.training.train" in command
-    assert "--config" in command and "default.yaml" in command
-    assert "--manifest" in command and "data/manifest.csv" in command
-    assert "--model" in command and "r3d18" in command
-    assert "--epochs" in command and "5" in command
-    assert "--batch-size" in command and "2" in command
-    assert training_service.EXIT_MARKER_PREFIX in command  # exit-code marker appended
-    assert captured["kwargs"]["start_new_session"] is True
+    # the plain ar-train argv is handed to launch_detached, which owns all
+    # the shell-wrapping/platform-specific plumbing (see test__background.py)
+    argv = captured["argv"]
+    assert "action_recognition.training.train" in argv
+    assert "--config" in argv and str(Path("configs/default.yaml")) in argv
+    assert "--manifest" in argv and "data/manifest.csv" in argv
+    assert "--model" in argv and "r3d18" in argv
+    assert "--epochs" in argv and "5" in argv
+    assert "--batch-size" in argv and "2" in argv
+    assert captured["kwargs"]["exit_marker_prefix"] == training_service.EXIT_MARKER_PREFIX
+    assert captured["kwargs"]["cwd"] == settings.REPO_ROOT
 
 
 @pytest.mark.django_db
@@ -86,19 +84,23 @@ def test_start_run_defaults_model_name_and_skips_absent_optional_flags(settings,
     settings.RUNS_DIR = tmp_path / "runs"
     settings.REPO_ROOT = tmp_path
     captured = {}
-    monkeypatch.setattr(
-        training_service.subprocess, "Popen", lambda argv, **kw: captured.update(argv=argv) or _FakeProcess()
-    )
+
+    def fake_launch_detached(argv, **kwargs):
+        captured["argv"] = argv
+        kwargs["log_file"].touch()
+        return 4242
+
+    monkeypatch.setattr(training_service._background, "launch_detached", fake_launch_detached)
 
     run = training_service.start_run(name="exp2", config_path=Path("configs/default.yaml"))
 
     assert run.model_name == "(from config)"
     assert run.manifest_path == ""
-    command = captured["argv"][2]
-    assert "--manifest" not in command
-    assert "--model" not in command
-    assert "--epochs" not in command
-    assert "--batch-size" not in command
+    argv = captured["argv"]
+    assert "--manifest" not in argv
+    assert "--model" not in argv
+    assert "--epochs" not in argv
+    assert "--batch-size" not in argv
 
 
 # --------------------------------------------------------------------- #
