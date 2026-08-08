@@ -346,9 +346,7 @@ def test_start_training_get_renders_form(client, repo):
 
 
 def test_start_training_post_starts_a_run_and_redirects(client, repo, monkeypatch):
-    monkeypatch.setattr(
-        training_service.subprocess, "Popen", lambda argv, **kw: type("P", (), {"pid": 999})()
-    )
+    monkeypatch.setattr(training_service._background, "launch_detached", lambda argv, **kw: 999)
 
     resp = client.post(
         reverse("core:start_training"),
@@ -361,9 +359,7 @@ def test_start_training_post_starts_a_run_and_redirects(client, repo, monkeypatc
 
 
 def test_start_training_post_rejects_duplicate_run_name(client, repo, monkeypatch):
-    monkeypatch.setattr(
-        training_service.subprocess, "Popen", lambda argv, **kw: type("P", (), {"pid": 999})()
-    )
+    monkeypatch.setattr(training_service._background, "launch_detached", lambda argv, **kw: 999)
     (repo / "runs" / "exp1").mkdir(parents=True)
 
     resp = client.post(

@@ -7,6 +7,7 @@ import pandas as pd
 
 from action_recognition.data.manifest import (
     MANIFEST_COLUMNS,
+    VIDEO_EXTENSIONS,
     discover_videos,
     read_manifest,
     write_manifest,
