@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "action-recognition"
-version = "0.1.0"
+version = "1.0.0"
 description = "Train custom action recognition models on your own labeled video datasets."
 readme = "README.md"
 requires-python = ">=3.9"
