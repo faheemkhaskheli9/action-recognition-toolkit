@@ -335,6 +335,28 @@ def test_review_manifest_saves_edited_rows(client, repo):
     assert updated.iloc[0]["label"] == "kick"
 
 
+def test_review_manifest_shows_inline_error_on_invalid_submission(client, repo):
+    manifest_path = repo / "data" / "manifest.csv"
+    manifest_path.parent.mkdir(parents=True)
+    pd.DataFrame({"video_path": ["/a.mp4"], "label": ["jump"]}).to_csv(manifest_path, index=False)
+
+    data = {
+        "manifest_path": "data/manifest.csv",
+        "form-TOTAL_FORMS": "1",
+        "form-INITIAL_FORMS": "1",
+        "form-0-video_path": "/a.mp4",
+        "form-0-label": "",  # required -- triggers a formset validation error
+        "form-0-split": "",
+    }
+    resp = client.post(reverse("core:review_manifest"), data)
+
+    assert resp.status_code == 200  # re-renders the form, no redirect
+    assert not resp.context["formset"].is_valid()
+    assert b"This field is required" in resp.content
+    # the manifest on disk is untouched -- the invalid post never got saved
+    assert pd.read_csv(manifest_path).iloc[0]["label"] == "jump"
+
+
 # --------------------------------------------------------------------- #
 # training.start_training
 # --------------------------------------------------------------------- #
