@@ -81,6 +81,25 @@ def test_inference_form_uses_supplied_checkpoint_choices():
     assert form.fields["checkpoint"].choices == [("best.pt", "exp1 / best.pt")]
 
 
+def test_inference_form_requires_an_uploaded_or_existing_video():
+    form = InferenceForm(
+        data={"checkpoint": "best.pt", "top_k": "3"},
+        checkpoint_choices=[("best.pt", "exp1 / best.pt")],
+    )
+
+    assert not form.is_valid()
+    assert form.non_field_errors()
+
+
+def test_inference_form_valid_with_only_an_existing_video():
+    form = InferenceForm(
+        data={"checkpoint": "best.pt", "top_k": "3", "existing_video": "data/raw/a.mp4"},
+        checkpoint_choices=[("best.pt", "exp1 / best.pt")],
+    )
+
+    assert form.is_valid(), form.errors
+
+
 def test_inference_form_top_k_bounds_are_enforced():
     from django.core.files.uploadedfile import SimpleUploadedFile
 

@@ -59,10 +59,10 @@ Pages:
   size, and launch `ar-train` as a detached background process.
 - **Runs** — list of past/running runs; a run's detail page tails its log
   live and lists any `best.pt`/`last.pt` it produced.
-- **Inference** — upload a video, pick a checkpoint from a finished run, get
-  top-k predictions. Check "scene mode" if the video has multiple people —
-  it detects+tracks each one and returns a per-person timeline instead of a
-  single whole-clip prediction.
+- **Inference** — upload a video (or pick one already in your dataset), pick
+  a checkpoint from a finished run, get top-k predictions. Check "scene
+  mode" if the video has multiple people — it detects+tracks each one and
+  returns a per-person timeline instead of a single whole-clip prediction.
 
 It reads/writes the same `data/`, `configs/`, and `runs/` the CLI tools below
 use — nothing is duplicated, the web app is just an interface onto them. Its

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -28,7 +29,8 @@ def start_extraction(request):
                 return redirect("core:extraction_detail", pk=run.pk)
     else:
         form = StartExtractionForm()
-    return render(request, "core/extraction_form.html", {"form": form})
+    known_video_dirs = services.manifest.known_video_dirs(settings.DATA_DIR)
+    return render(request, "core/extraction_form.html", {"form": form, "known_video_dirs": known_video_dirs})
 
 
 def extraction_list(request):

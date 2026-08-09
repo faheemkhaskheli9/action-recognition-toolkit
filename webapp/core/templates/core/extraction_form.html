@@ -20,6 +20,9 @@
       {{ field.errors }}
     </div>
   {% endfor %}
+  <datalist id="known-video-dirs">
+    {% for dir in known_video_dirs %}<option value="{{ dir }}">{% endfor %}
+  </datalist>
   <button type="submit">Start extraction</button>
 </form>
 <p class="muted">Runs launch as a background process; you'll be redirected to its live log.</p>

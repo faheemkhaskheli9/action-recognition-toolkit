@@ -14,6 +14,7 @@ class StartExtractionForm(forms.Form):
     video_dir = forms.CharField(
         initial="data/raw_scenes",
         help_text="Folder of raw multi-person videos to detect+track (searched recursively).",
+        widget=forms.TextInput(attrs={"list": "known-video-dirs", "autocomplete": "off"}),
     )
     config = forms.ChoiceField(
         required=False, help_text="Tracking config from configs/tracking/; defaults to default.yaml"
@@ -32,7 +33,10 @@ class StartTrainingForm(forms.Form):
     )
     config = forms.ChoiceField(help_text="Base config from configs/; fields below override it.")
     manifest_path = forms.CharField(
-        required=False, initial="data/manifest.csv", help_text="Overrides data.manifest"
+        required=False,
+        initial="data/manifest.csv",
+        help_text="Overrides data.manifest",
+        widget=forms.TextInput(attrs={"list": "known-manifests", "autocomplete": "off"}),
     )
     model_name = forms.CharField(
         required=False, help_text="Overrides model.name, e.g. cnn_lstm or r3d18"
@@ -60,7 +64,14 @@ ManifestFormSet = forms.formset_factory(ManifestRowForm, extra=0, can_delete=Tru
 
 class InferenceForm(forms.Form):
     checkpoint = forms.ChoiceField()
-    video = forms.FileField()
+    video = forms.FileField(
+        required=False, help_text="Upload a new video, or pick an already-uploaded one below instead."
+    )
+    existing_video = forms.CharField(
+        required=False,
+        help_text="Or pick a video already in your dataset (data/raw, data/tracks/...) instead of uploading.",
+        widget=forms.TextInput(attrs={"list": "known-videos", "autocomplete": "off"}),
+    )
     top_k = forms.IntegerField(initial=3, min_value=1, max_value=10)
     scene_mode = forms.BooleanField(
         required=False,
@@ -70,3 +81,9 @@ class InferenceForm(forms.Form):
     def __init__(self, *args, checkpoint_choices=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["checkpoint"].choices = checkpoint_choices or []
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("video") and not cleaned.get("existing_video"):
+            raise forms.ValidationError("Upload a video or pick an existing one.")
+        return cleaned

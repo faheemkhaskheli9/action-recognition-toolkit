@@ -51,6 +51,8 @@ def test_dataset_list_shows_labeled_and_unlabeled_videos(client, repo):
     assert resp.context["unlabeled_count"] == 1
     names = {row["name"] for row in resp.context["rows"]}
     assert names == {"a.mp4", "b.mp4"}
+    assert resp.context["known_video_dirs"] == ["data/raw"]
+    assert resp.context["known_manifest_paths"] == ["data/manifest.csv"]
 
 
 def test_upload_videos_saves_file_into_video_dir(client, repo):
@@ -183,6 +185,21 @@ def test_delete_entry_can_delete_the_file_too(client, repo):
 
 
 # --------------------------------------------------------------------- #
+# extraction.start_extraction
+# --------------------------------------------------------------------- #
+
+def test_start_extraction_get_lists_known_video_dirs(client, repo):
+    video_dir = repo / "data" / "raw_scenes"
+    video_dir.mkdir(parents=True)
+    (video_dir / "a.mp4").write_bytes(b"x")
+
+    resp = client.get(reverse("core:start_extraction"))
+
+    assert resp.status_code == 200
+    assert resp.context["known_video_dirs"] == ["data/raw_scenes"]
+
+
+# --------------------------------------------------------------------- #
 # labeling.label_videos
 # --------------------------------------------------------------------- #
 
@@ -204,6 +221,7 @@ def test_label_videos_shows_first_unlabeled_video(client, repo):
     assert resp.context["current_name"] == "a.mp4"
     assert resp.context["labeled_count"] == 0
     assert resp.context["total"] == 1
+    assert resp.context["known_video_dirs"] == ["data/raw"]
 
 
 def test_label_videos_remembers_folder_choice_in_session(client, repo):
@@ -362,9 +380,15 @@ def test_review_manifest_shows_inline_error_on_invalid_submission(client, repo):
 # --------------------------------------------------------------------- #
 
 def test_start_training_get_renders_form(client, repo):
+    manifest_path = repo / "data" / "manifest.csv"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text("video_path,label\n")
+
     resp = client.get(reverse("core:start_training"))
+
     assert resp.status_code == 200
     assert "form" in resp.context
+    assert resp.context["known_manifest_paths"] == ["data/manifest.csv"]
 
 
 def test_start_training_post_starts_a_run_and_redirects(client, repo, monkeypatch):
@@ -487,6 +511,61 @@ def test_inference_post_runs_prediction_and_cleans_up_upload(client, repo, monke
     assert resp.context["result"] == [("jump", 0.87)]
     uploads_dir = repo / "media" / "uploads"
     assert list(uploads_dir.iterdir()) == []  # temp upload was deleted after prediction
+
+
+def test_inference_get_lists_known_videos_from_the_dataset(client, repo):
+    _running_run(repo)
+    (repo / "runs" / "exp1" / "best.pt").write_bytes(b"x")
+    video_dir = repo / "data" / "raw"
+    video_dir.mkdir(parents=True)
+    (video_dir / "a.mp4").write_bytes(b"x")
+
+    resp = client.get(reverse("core:inference"))
+
+    assert resp.context["known_videos"] == [{"path": "data/raw/a.mp4", "name": "raw/a.mp4"}]
+
+
+def test_inference_post_with_existing_video_skips_upload(client, repo, monkeypatch):
+    run = _running_run(repo)
+    checkpoint = repo / "runs" / "exp1" / "best.pt"
+    checkpoint.write_bytes(b"x")
+    video_dir = repo / "data" / "raw"
+    video_dir.mkdir(parents=True)
+    (video_dir / "a.mp4").write_bytes(b"x")
+
+    from core.services import inference as inference_service_module
+
+    monkeypatch.setattr(
+        inference_service_module, "run_predict", lambda checkpoint_path, video_path, top_k=3: [("jump", 0.87)]
+    )
+
+    resp = client.post(
+        reverse("core:inference"),
+        {"checkpoint": str(checkpoint), "existing_video": "data/raw/a.mp4", "top_k": 3},
+    )
+
+    assert resp.status_code == 200
+    assert resp.context["result"] == [("jump", 0.87)]
+    uploads_dir = repo / "media" / "uploads"
+    assert not uploads_dir.exists() or list(uploads_dir.iterdir()) == []
+
+
+def test_inference_post_rejects_existing_video_outside_the_repo(client, repo, tmp_path_factory):
+    run = _running_run(repo)
+    checkpoint = repo / "runs" / "exp1" / "best.pt"
+    checkpoint.write_bytes(b"x")
+    outside = tmp_path_factory.mktemp("outside") / "outside.mp4"
+    outside.write_bytes(b"x")
+    escaping_rel_path = __import__("os").path.relpath(outside, repo)
+
+    resp = client.post(
+        reverse("core:inference"),
+        {"checkpoint": str(checkpoint), "existing_video": escaping_rel_path, "top_k": 3},
+    )
+
+    assert resp.status_code == 200
+    assert resp.context["result"] is None
+    assert "existing_video" in resp.context["form"].errors
 
 
 def test_inference_post_reports_prediction_failure_and_still_cleans_up(client, repo, monkeypatch):

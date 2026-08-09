@@ -13,6 +13,9 @@
       {{ field.errors }}
     </div>
   {% endfor %}
+  <datalist id="known-manifests">
+    {% for path in known_manifest_paths %}<option value="{{ path }}">{% endfor %}
+  </datalist>
   <button type="submit">Start run</button>
 </form>
 <p class="muted">Runs launch as a background process; you'll be redirected to its live log.</p>
