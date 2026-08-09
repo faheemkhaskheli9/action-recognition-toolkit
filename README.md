@@ -255,6 +255,23 @@ tests/         pytest suite (manifest, dataset, model registry, tracking)
   not for a multi-user one. See `docs/plans/app-ux-permissions-security-scalability.md`
   for the planned per-site RBAC direction.
 
+## Roadmap
+
+This README documents the app as it is today. Longer-term direction lives
+under [`docs/plans/`](docs/plans/):
+
+- [`v1-release-plan.md`](docs/plans/v1-release-plan.md) — hardening this
+  existing single-user tool into a tagged v1.0 (versioning, CI, security/
+  UX follow-ups) before anything below starts.
+- [`multi-camera-person-monitoring.md`](docs/plans/multi-camera-person-monitoring.md)
+  — phased roadmap for extending this into multi-camera monitoring with
+  cross-camera person re-identification.
+- [`app-ux-permissions-security-scalability.md`](docs/plans/app-ux-permissions-security-scalability.md)
+  — UI/UX, permissions/RBAC, security, and scaling detail for those phases.
+
+None of that changes how the tool works today — see "Known limitations"
+above for the current, honest state of things.
+
 ## Tests
 
 ```bash
