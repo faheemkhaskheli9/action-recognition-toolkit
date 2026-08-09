@@ -16,6 +16,9 @@
   {% csrf_token %}
   <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
   {{ formset.management_form }}
+  {% if formset.non_form_errors %}
+    <p class="error">{{ formset.non_form_errors|join:" " }}</p>
+  {% endif %}
   <table>
     <thead>
       <tr>
@@ -28,9 +31,9 @@
     <tbody>
       {% for form in formset %}
       <tr>
-        <td>{{ form.video_path }}</td>
-        <td>{{ form.label }}</td>
-        {% if has_split %}<td>{{ form.split }}</td>{% endif %}
+        <td>{{ form.video_path }}{{ form.video_path.errors }}</td>
+        <td>{{ form.label }}{{ form.label.errors }}</td>
+        {% if has_split %}<td>{{ form.split }}{{ form.split.errors }}</td>{% endif %}
         <td>{{ form.DELETE }}</td>
       </tr>
       {% endfor %}
