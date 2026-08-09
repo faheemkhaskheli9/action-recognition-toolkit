@@ -2,6 +2,43 @@
 {% block title %}Dataset{% endblock %}
 {% block content %}
 <h1>Dataset</h1>
+
+<div class="card">
+  <h2>How this works</h2>
+  <p class="muted">Training a custom action-recognition model, start to finish:</p>
+  <ol>
+    <li>
+      <strong>Raw footage with more than one person in frame</strong> (a
+      restaurant, warehouse, retail floor, anything)? Run
+      <a href="{% url 'core:start_extraction' %}">Extract tracks</a> first —
+      it detects and tracks every person and crops one clip per tracked
+      person into <code>data/tracks/&lt;video&gt;/</code>. Already have
+      clips trimmed to one person each? Skip straight to labeling.
+    </li>
+    <li>
+      <strong>Label</strong> every clip with whatever action taxonomy fits
+      your scenario (staff tasks, customer behavior, anything you define) —
+      upload and label right here on this page, or use the
+      <a href="{% url 'core:label_videos' %}?video_dir={{ video_dir|urlencode }}&manifest_path={{ manifest_path|urlencode }}">Label</a>
+      page to go through unlabeled clips one at a time.
+    </li>
+    <li>
+      <a href="{% url 'core:review_manifest' %}">Review manifest</a> any
+      time to fix or delete labels you've already saved.
+    </li>
+    <li>
+      <a href="{% url 'core:start_training' %}">Train</a> a model once
+      you've got labeled clips across at least two classes.
+    </li>
+    <li>
+      <a href="{% url 'core:inference' %}">Inference</a> a finished
+      checkpoint on a new video — tick "scene mode" if that video also has
+      multiple people, to get a separate prediction per tracked person
+      instead of one label for the whole clip.
+    </li>
+  </ol>
+</div>
+
 <p class="muted">
   Upload videos, see what's in your dataset, and fix labels — all in one place.
   Prefer labeling one at a time? Use the
