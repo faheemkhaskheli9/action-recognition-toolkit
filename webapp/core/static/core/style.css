@@ -34,6 +34,8 @@ nav a:hover { color: var(--accent); }
 
 nav .brand { font-weight: 700; margin-right: 0.5rem; }
 
+nav .nav-user { margin-left: auto; color: var(--muted); font-size: 0.9rem; }
+
 main {
   max-width: 900px;
   margin: 0 auto;
@@ -60,11 +62,13 @@ h1 { margin-top: 0; }
 .messages .success { background: #e4f6ea; color: #196c33; }
 .messages .error { background: #fbe6e6; color: #a5241b; }
 
+p.error { color: #a5241b; }
+
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
 
-input[type=text], input[type=number], input[type=file], select {
+input[type=text], input[type=password], input[type=number], input[type=file], select {
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 6px;
