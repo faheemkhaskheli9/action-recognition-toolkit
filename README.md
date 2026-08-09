@@ -28,10 +28,19 @@ past runs and their checkpoints, and run inference on an uploaded video.
 ```bash
 cd webapp
 python manage.py migrate
+python manage.py createsuperuser  # first run only — every page requires login
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/. Pages:
+Open http://127.0.0.1:8000/ and log in with the account you just created.
+For additional logins later, run `createsuperuser` again or use
+`manage.py shell` + `User.objects.create_user(...)` for a non-admin login.
+Don't mark extra accounts `is_staff` unless they're meant to have
+unmediated `/admin/` access to the run database — `/admin/` gates itself
+separately from the rest of the app (see `core/middleware.py`) and isn't
+scoped per-page.
+
+Pages:
 
 - **Label** — drop video files (`.mp4`, `.avi`, `.mov`, `.mkv`, `.webm`)
   anywhere under `data/raw/` (flat or nested, layout doesn't matter), point

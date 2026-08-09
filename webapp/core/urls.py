@@ -1,3 +1,4 @@
+from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from .views import dataset, extraction, inference, labeling, runs, training
@@ -5,6 +6,12 @@ from .views import dataset, extraction, inference, labeling, runs, training
 app_name = "core"
 
 urlpatterns = [
+    path(
+        "login/",
+        auth_views.LoginView.as_view(template_name="core/login.html", redirect_authenticated_user=True),
+        name="login",
+    ),
+    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("", dataset.dataset_list, name="dataset_list"),
     path("dataset/upload/", dataset.upload_videos, name="upload_videos"),
     path("dataset/label/", dataset.update_label, name="update_label"),
