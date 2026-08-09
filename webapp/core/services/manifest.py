@@ -78,6 +78,51 @@ def progress(video_dir: Path, manifest: pd.DataFrame) -> tuple[int, int]:
     return labeled_count, len(all_videos)
 
 
+def _relative_posix(path: Path, base: Path) -> str:
+    try:
+        return path.relative_to(base).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def known_video_dirs(data_dir: Path) -> list[str]:
+    """Every directory under `data_dir` that directly holds at least one video
+    file, as paths relative to `data_dir`'s parent (the repo root) — powers
+    the video-folder picker so users choose among folders they've already
+    used (data/raw, data/tracks/<name>, ...) instead of typing one from
+    memory."""
+    if not data_dir.exists():
+        return []
+    repo_root = data_dir.parent
+    dirs = {video.parent for video in discover_videos(data_dir)}
+    return sorted({_relative_posix(d, repo_root) for d in dirs})
+
+
+def known_manifest_paths(data_dir: Path) -> list[str]:
+    """Every manifest CSV under `data_dir`, as paths relative to its parent
+    (the repo root) — powers the manifest-file picker."""
+    if not data_dir.exists():
+        return []
+    repo_root = data_dir.parent
+    return sorted({_relative_posix(p, repo_root) for p in data_dir.rglob("*.csv")})
+
+
+def known_videos(data_dir: Path) -> list[dict]:
+    """Every video file already under `data_dir` (uploaded via the Dataset
+    page or produced by track extraction) — lets Inference offer picking one
+    directly instead of requiring a fresh upload every time. `path` is
+    relative to the repo root (what forms/views elsewhere use for video_dir/
+    manifest_path); `name` is relative to `data_dir`, for a shorter display."""
+    if not data_dir.exists():
+        return []
+    repo_root = data_dir.parent
+    videos = [
+        {"path": _relative_posix(video, repo_root), "name": _relative_posix(video, data_dir)}
+        for video in discover_videos(data_dir)
+    ]
+    return sorted(videos, key=lambda v: v["name"])
+
+
 def dataset_rows(video_dir: Path, manifest: pd.DataFrame) -> list[dict]:
     """Every video file found under `video_dir`, cross-referenced with its
     manifest label/split if it has one — the listing behind the dataset CRUD

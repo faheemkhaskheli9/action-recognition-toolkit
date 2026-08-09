@@ -26,6 +26,17 @@ full scope and what's deliberately deferred to later releases.
 - `docs/` — a beginner-oriented walkthrough of the existing pipeline, plus
   the multi-camera monitoring roadmap and its UX/permissions/security/
   scalability companion doc, for planned future work.
+- The Dataset page now explains the full pipeline in-app (including the
+  multi-person raw-footage path: Extract tracks → Label → Train →
+  Inference with scene mode) instead of only in `README.md`; Inference's
+  "scene mode" help text — previously defined but never rendered — now
+  shows up on the page.
+- Video-folder, manifest-file, and video fields across Extract tracks,
+  Train, Dataset, Label, Review manifest, and Inference are now searchable
+  dropdowns of values already seen on disk instead of blank text boxes —
+  free text still works for a new path. Inference can also run directly
+  against an already-uploaded dataset video instead of requiring a fresh
+  upload every time.
 
 ### Fixed
 - `services/manifest.py` was missing the `VIDEO_EXTENSIONS` import that

@@ -6,7 +6,10 @@
 <form method="get" class="card">
   <div class="field">
     <label>Manifest file</label>
-    <input type="text" name="manifest_path" value="{{ manifest_path }}">
+    <input type="text" name="manifest_path" value="{{ manifest_path }}" list="known-manifests" autocomplete="off">
+    <datalist id="known-manifests">
+      {% for path in known_manifest_paths %}<option value="{{ path }}">{% endfor %}
+    </datalist>
   </div>
   <button type="submit">Load</button>
 </form>

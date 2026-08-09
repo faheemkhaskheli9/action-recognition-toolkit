@@ -4,6 +4,9 @@ from core.services.manifest import (
     dataset_rows,
     delete_entry,
     known_labels,
+    known_manifest_paths,
+    known_video_dirs,
+    known_videos,
     load_manifest,
     next_unlabeled,
     progress,
@@ -145,6 +148,51 @@ def test_delete_entry_on_unknown_video_is_a_no_op(tmp_path):
     updated = delete_entry(manifest_path, manifest, video)
 
     assert len(updated) == 0
+
+
+def test_known_video_dirs_lists_repo_relative_dirs_that_hold_videos(tmp_path):
+    data_dir = tmp_path / "data"
+    raw = data_dir / "raw"
+    raw.mkdir(parents=True)
+    (raw / "a.mp4").write_bytes(b"x")
+    tracks = data_dir / "tracks" / "run1"
+    tracks.mkdir(parents=True)
+    (tracks / "b.mp4").write_bytes(b"x")
+    empty = data_dir / "empty"
+    empty.mkdir()
+
+    assert known_video_dirs(data_dir) == ["data/raw", "data/tracks/run1"]
+
+
+def test_known_video_dirs_empty_when_data_dir_missing(tmp_path):
+    assert known_video_dirs(tmp_path / "does_not_exist") == []
+
+
+def test_known_manifest_paths_finds_csvs_anywhere_under_data_dir(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "manifest.csv").write_text("video_path,label\n")
+    nested = data_dir / "tracks" / "run1"
+    nested.mkdir(parents=True)
+    (nested / "tracks_index.csv").write_text("x\n")
+    (data_dir / "not_a_manifest.txt").write_text("x")
+
+    assert known_manifest_paths(data_dir) == ["data/manifest.csv", "data/tracks/run1/tracks_index.csv"]
+
+
+def test_known_videos_returns_repo_relative_path_and_data_relative_name(tmp_path):
+    data_dir = tmp_path / "data"
+    raw = data_dir / "raw"
+    raw.mkdir(parents=True)
+    (raw / "b.mp4").write_bytes(b"x")
+    (raw / "a.mp4").write_bytes(b"x")
+
+    videos = known_videos(data_dir)
+
+    assert videos == [
+        {"path": "data/raw/a.mp4", "name": "raw/a.mp4"},
+        {"path": "data/raw/b.mp4", "name": "raw/b.mp4"},
+    ]
 
 
 def test_dataset_rows_merges_discovered_videos_with_manifest_labels(tmp_path):
