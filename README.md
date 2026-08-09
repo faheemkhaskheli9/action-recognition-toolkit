@@ -69,6 +69,24 @@ use — nothing is duplicated, the web app is just an interface onto them. Its
 own state (`db.sqlite3` tracking runs, uploaded inference videos in `media/`)
 lives under `webapp/` and is gitignored.
 
+### Environment variables
+
+Unset, these default to `runserver`-on-localhost behavior — nothing below
+is required for local development. Set all three before deploying anywhere
+reachable by someone other than the operator at their own keyboard: this
+app handles uploaded video and per-person track data.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DJANGO_SECRET_KEY` | a fixed insecure dev key | Django's cryptographic signing key. Generate a real one (`django.core.management.utils.get_random_secret_key()`) per deployment. |
+| `DJANGO_DEBUG` | `true` | Set `false` for any non-localhost deployment. Also turns on `SECURE_SSL_REDIRECT`/`SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`/HSTS (`webapp/config/settings.py`), so only set this once the app is actually served over HTTPS behind a real web server — `runserver` itself is plain HTTP and would lock you out. |
+| `DJANGO_ALLOWED_HOSTS` | empty (only `runserver`'s implicit localhost) | Comma-separated hostnames, e.g. `example.com,www.example.com`. |
+
+Not configurable via environment variable, deliberate for v1.0: session/
+CSRF cookie lifetime (Django's 2-week default) and login rate-limiting/
+lockout — reasonable for a single-operator deployment with no public
+signup; revisit if that changes. See `docs/plans/v1-release-plan.md` §A4.
+
 ## CLI workflow
 
 Everything the web app does is also available from the command line.
@@ -215,16 +233,27 @@ tests/         pytest suite (manifest, dataset, model registry, tracking)
   frame rather than consistently across a clip's frames.
 - Single-clip-per-video sampling — long videos aren't split into multiple
   training clips.
-- The default tracker is a simple greedy IoU matcher with no motion model —
-  it can lose an identity through a long occlusion or a fast-moving/crowded
-  scene. The default detector only distinguishes "person" (COCO), with no
-  re-identification across cameras or across a gap where a track was lost.
-  Both are swappable via the `tracking.detectors`/`tracking.trackers`
-  registries (same pattern as `action_recognition.models`) without touching
-  the extraction or scene-inference pipeline.
+- The default tracker (`iou`) is a simple greedy matcher with no motion
+  model — it can lose an identity through a long occlusion or a
+  fast-moving/crowded scene. A motion-model alternative (`sort`: Kalman
+  filter + Hungarian assignment) is available via
+  `tracking.tracker.name: sort` and survives short occlusion gaps `iou`
+  can't (see `tests/test_trackers.py`), but isn't the default yet — no MOT-
+  metric (IDF1/ID-switch) evaluation against a labeled clip exists to
+  confirm it's a strict improvement across the board. The default detector
+  only distinguishes "person" (COCO), with no re-identification across
+  cameras or across a gap where a track was lost. Both detector and tracker
+  are swappable via the `tracking.detectors`/`tracking.trackers` registries
+  (same pattern as `action_recognition.models`) without touching the
+  extraction or scene-inference pipeline.
 - A clip file's label is still single-label (softmax) — a person doing two
   things at once isn't represented. Multi-label per-person tagging would
   need a different loss/config, not currently implemented.
+- The webapp gates every page behind login (single shared user table, no
+  per-role/per-site permissions yet) but has no login rate-limiting/lockout
+  and no password-reset flow — acceptable for a single-operator deployment,
+  not for a multi-user one. See `docs/plans/app-ux-permissions-security-scalability.md`
+  for the planned per-site RBAC direction.
 
 ## Tests
 

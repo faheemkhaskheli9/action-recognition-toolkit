@@ -154,6 +154,12 @@ LOGIN_URL = "core:login"
 LOGIN_REDIRECT_URL = "core:dataset_list"
 LOGOUT_REDIRECT_URL = "core:login"
 
+# SESSION_COOKIE_AGE left at Django's 2-week default deliberately, not an
+# oversight: single-operator deployment, no public signup, low value in
+# forcing frequent re-logins. Same posture for login rate-limiting/lockout,
+# which isn't implemented at all yet -- both are worth revisiting if this
+# ever moves to multi-user (see docs/plans/app-ux-permissions-security-scalability.md).
+
 # Transport/cookie security only makes sense once this is actually served
 # over HTTPS behind a real web server — forcing it under `runserver` (which
 # is plain HTTP) would just lock everyone out of local dev.
