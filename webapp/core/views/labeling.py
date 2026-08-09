@@ -3,6 +3,7 @@ from __future__ import annotations
 import mimetypes
 
 import pandas as pd
+from django.conf import settings
 from django.contrib import messages
 from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
@@ -24,7 +25,12 @@ def label_videos(request):
     video_dir = resolve_repo_path(video_dir_str)
     manifest_path = resolve_repo_path(manifest_path_str)
 
-    context = {"video_dir": video_dir_str, "manifest_path": manifest_path_str}
+    context = {
+        "video_dir": video_dir_str,
+        "manifest_path": manifest_path_str,
+        "known_video_dirs": services.manifest.known_video_dirs(settings.DATA_DIR),
+        "known_manifest_paths": services.manifest.known_manifest_paths(settings.DATA_DIR),
+    }
 
     if not video_dir.exists():
         context["missing_dir"] = True
@@ -119,5 +125,10 @@ def review_manifest(request):
     return render(
         request,
         "core/review_manifest.html",
-        {"formset": formset, "manifest_path": manifest_path_str, "has_split": has_split},
+        {
+            "formset": formset,
+            "manifest_path": manifest_path_str,
+            "has_split": has_split,
+            "known_manifest_paths": services.manifest.known_manifest_paths(settings.DATA_DIR),
+        },
     )

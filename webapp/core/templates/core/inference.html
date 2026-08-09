@@ -8,6 +8,7 @@
 {% else %}
 <form method="post" enctype="multipart/form-data" class="card">
   {% csrf_token %}
+  {% if form.non_field_errors %}<p class="error">{{ form.non_field_errors|join:" " }}</p>{% endif %}
   {% for field in form %}
     <div class="field">
       {{ field.label_tag }}
@@ -16,6 +17,9 @@
       {{ field.errors }}
     </div>
   {% endfor %}
+  <datalist id="known-videos">
+    {% for video in known_videos %}<option value="{{ video.path }}">{{ video.name }}</option>{% endfor %}
+  </datalist>
   <button type="submit">Predict</button>
 </form>
 
