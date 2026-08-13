@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 from action_recognition.utils.checkpoint import load_checkpoint, save_checkpoint
+from action_recognition.utils.device import resolve_device
 from action_recognition.utils.logging import get_logger
 from action_recognition.utils.seed import set_seed
 
@@ -54,3 +55,31 @@ def test_save_checkpoint_creates_parent_directories(tmp_path):
 
     assert path.parent.is_dir()
     assert path.exists()
+
+
+# --------------------------------------------------------------------- #
+# resolve_device
+# --------------------------------------------------------------------- #
+
+def test_resolve_device_honors_explicit_request():
+    assert resolve_device("cpu") == torch.device("cpu")
+
+
+def test_resolve_device_falls_back_to_cpu_when_nothing_requested(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
+
+    assert resolve_device(None) == torch.device("cpu")
+
+
+def test_resolve_device_prefers_cuda_when_available(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+    assert resolve_device(None) == torch.device("cuda")
+
+
+def test_resolve_device_prefers_mps_over_cpu_when_cuda_unavailable(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+
+    assert resolve_device(None) == torch.device("mps")

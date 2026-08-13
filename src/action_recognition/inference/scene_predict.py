@@ -19,6 +19,7 @@ from action_recognition.tracking.detectors import build_detector
 from action_recognition.tracking.extract import read_window_frames, track_video, windows_for_track
 from action_recognition.tracking.trackers import build_tracker
 from action_recognition.utils.checkpoint import load_checkpoint
+from action_recognition.utils.device import resolve_device
 
 DEFAULT_DETECTOR = {"name": "fasterrcnn", "params": {"score_thresh": 0.6}}
 DEFAULT_TRACKER = {"name": "iou", "params": {"iou_thresh": 0.3, "max_age": 15}}
@@ -42,7 +43,7 @@ def predict_scene(
     idx_to_label = {idx: label for label, idx in label_map.items()}
     num_frames = config["data"]["num_frames"]
 
-    resolved_device = torch.device(device) if device else torch.device("cpu")
+    resolved_device = resolve_device(device)
     model = build_model(config["model"]["name"], num_classes=len(label_map), **config["model"]["params"])
     model.load_state_dict(checkpoint["model_state"])
     model.to(resolved_device).eval()
@@ -50,7 +51,8 @@ def predict_scene(
 
     detector_config = detector_config or DEFAULT_DETECTOR
     tracker_config = tracker_config or DEFAULT_TRACKER
-    detector = build_detector(detector_config["name"], **detector_config.get("params", {}))
+    detector_params = {"device": str(resolved_device), **detector_config.get("params", {})}
+    detector = build_detector(detector_config["name"], **detector_params)
     tracker = build_tracker(tracker_config["name"], **tracker_config.get("params", {}))
 
     tracks = track_video(str(video_path), detector, tracker, frame_stride=frame_stride)

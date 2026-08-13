@@ -15,6 +15,10 @@ import pandas as pd
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 MANIFEST_COLUMNS = ["video_path", "label"]
 SPLITS = ("train", "val", "test")
+# Optional columns a row may carry to label just a span of a longer source
+# video (seconds, source-file-relative) instead of the whole file. Absent or
+# blank means "whole video" -- see data.dataset.read_clip_frames.
+SPAN_COLUMNS = ["start_time", "end_time"]
 
 
 def discover_videos(root: Path) -> list[Path]:

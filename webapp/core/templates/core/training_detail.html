@@ -2,10 +2,13 @@
 {% block title %}{{ run.name }}{% endblock %}
 {% block content %}
 <h1>{{ run.name }}</h1>
-<p>
-  <span class="status-pill status-{{ run.status }}" id="status-pill">{{ run.get_status_display }}</span>
-  <span class="muted">model={{ run.model_name }} config={{ run.config_path }} pid={{ run.pid }}</span>
-</p>
+
+<div class="card">
+  <p class="mt-0">
+    <span class="status-pill status-{{ run.status }}" id="status-pill" aria-live="polite">{{ run.get_status_display }}</span>
+  </p>
+  <p class="muted mb-0">model={{ run.model_name }} &middot; config={{ run.config_path }} &middot; pid={{ run.pid }}</p>
+</div>
 
 {% if checkpoints %}
 <div class="card">
@@ -15,29 +18,18 @@
       <li>{{ name }} &mdash; <span class="muted">{{ path }}</span></li>
     {% endfor %}
   </ul>
+  {% if run.status == "succeeded" %}
+    <p class="muted">
+      Ready to try it: run <a href="{% url 'core:inference' %}">Inference</a>
+      against this checkpoint.
+    </p>
+  {% endif %}
 </div>
 {% endif %}
 
-<h2>Log</h2>
-<pre class="log" id="log">{{ log_tail }}</pre>
-
-{% if run.status == "running" %}
-<script>
-  const logEl = document.getElementById("log");
-  const pillEl = document.getElementById("status-pill");
-  async function poll() {
-    const res = await fetch("{% url 'core:run_log_partial' run.pk %}");
-    const data = await res.json();
-    logEl.textContent = data.log_tail;
-    logEl.scrollTop = logEl.scrollHeight;
-    if (data.status !== "running") {
-      pillEl.textContent = data.status;
-      pillEl.className = "status-pill status-" + data.status;
-      return;
-    }
-    setTimeout(poll, 3000);
-  }
-  setTimeout(poll, 3000);
-</script>
-{% endif %}
+<div class="log-toolbar">
+  <h2 class="m-0">Log</h2>
+  <button type="button" class="ghost" data-copy-target="log">Copy log</button>
+</div>
+<pre class="log" id="log" aria-live="polite"{% if run.status == "running" %} data-log-poll-url="{% url 'core:run_log_partial' run.pk %}"{% endif %}>{{ log_tail }}</pre>
 {% endblock %}

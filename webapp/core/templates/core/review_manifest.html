@@ -3,48 +3,50 @@
 {% block content %}
 <h1>Review / edit manifest</h1>
 
-<form method="get" class="card">
-  <div class="field">
-    <label>Manifest file</label>
-    <input type="text" name="manifest_path" value="{{ manifest_path }}" list="known-manifests" autocomplete="off">
-    <datalist id="known-manifests">
-      {% for path in known_manifest_paths %}<option value="{{ path }}">{% endfor %}
-    </datalist>
-  </div>
-  <button type="submit">Load</button>
-</form>
+{% include "core/_dataset_picker.html" %}
 
-{% if formset.forms %}
+{% if not dataset %}
+  <div class="empty-state">No datasets yet — <a href="{% url 'core:manage_datasets' %}">create one</a> to get started.</div>
+{% elif formset.forms %}
 <form method="post">
   {% csrf_token %}
-  <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
+  <input type="hidden" name="dataset" value="{{ dataset.slug }}">
   {{ formset.management_form }}
   {% if formset.non_form_errors %}
     <p class="error">{{ formset.non_form_errors|join:" " }}</p>
   {% endif %}
+  <div class="table-wrap responsive-stack">
   <table>
     <thead>
       <tr>
         <th>Video</th>
         <th>Label</th>
         {% if has_split %}<th>Split</th>{% endif %}
+        {% if has_spans %}<th>Time span</th>{% endif %}
         <th>Delete</th>
       </tr>
     </thead>
     <tbody>
       {% for form in formset %}
       <tr>
-        <td>{{ form.video_path }}{{ form.video_path.errors }}</td>
-        <td>{{ form.label }}{{ form.label.errors }}</td>
-        {% if has_split %}<td>{{ form.split }}{{ form.split.errors }}</td>{% endif %}
-        <td>{{ form.DELETE }}</td>
+        <td data-label="Video">{{ form.video_path }}{{ form.video_path.errors }}</td>
+        <td data-label="Label">{{ form.label }}{{ form.label.errors }}</td>
+        {% if has_split %}<td data-label="Split">{{ form.split }}{{ form.split.errors }}</td>{% endif %}
+        {% if has_spans %}
+          <td data-label="Time span">
+            {{ form.initial.span_display|default:"whole video" }}
+            {{ form.start_time }}{{ form.end_time }}{{ form.span_display }}
+          </td>
+        {% endif %}
+        <td data-label="Delete">{{ form.DELETE }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
-  <button type="submit" style="margin-top:1rem;">Save changes</button>
+  </div>
+  <button type="submit" class="mt-4">Save changes</button>
 </form>
 {% else %}
-  <p class="muted">No labels yet.</p>
+  <div class="empty-state">No labels yet.</div>
 {% endif %}
 {% endblock %}

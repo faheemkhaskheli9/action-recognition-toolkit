@@ -5,23 +5,32 @@
 <p><a href="{% url 'core:start_extraction' %}" class="btn">+ New extraction</a></p>
 
 {% if runs %}
-<table>
+<input type="search" class="table-filter" data-table-filter="#extraction-table" placeholder="Filter by name or video dir…">
+<div class="table-wrap">
+<table id="extraction-table">
   <thead>
-    <tr><th>Name</th><th>Video dir</th><th>Status</th><th>Started</th><th></th></tr>
+    <tr><th>Name</th><th>Video dir</th><th>Status</th><th>Clips</th><th>Started</th><th></th></tr>
   </thead>
   <tbody>
     {% for run in runs %}
     <tr>
-      <td>{{ run.name }}</td>
-      <td>{{ run.video_dir }}</td>
-      <td><span class="status-pill status-{{ run.status }}">{{ run.get_status_display }}</span></td>
-      <td>{{ run.created_at }}</td>
+      <td><a href="{% url 'core:extraction_detail' run.pk %}">{{ run.name }}</a></td>
+      <td><code>{{ run.video_dir }}</code></td>
+      <td>
+        <span class="status-pill status-{{ run.status }}">{{ run.get_status_display }}</span>
+        {% if run.progress %}<div class="muted text-xs mt-1">video {{ run.progress.current }}/{{ run.progress.total }}</div>{% endif %}
+      </td>
+      <td>{{ run.clip_count|default:"—" }}</td>
+      <td class="muted" title="{{ run.created_at }}">{{ run.created_at|timesince }} ago</td>
       <td><a href="{% url 'core:extraction_detail' run.pk %}">View</a></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
-  <p class="muted">No extraction runs yet.</p>
+  <div class="empty-state">
+    No extraction runs yet — <a href="{% url 'core:start_extraction' %}">start one</a> from raw footage.
+  </div>
 {% endif %}
 {% endblock %}

@@ -1,19 +1,20 @@
 """The dataset CRUD page: upload videos, see every video and its label, edit
-labels inline, delete entries. `label_videos` (labeling.py) is the focused
-one-at-a-time labeling stepper; this page is the "see the whole dataset" and
-"get videos in in the first place" counterpart."""
+labels inline, delete entries -- all scoped to the current Dataset (see
+services.datasets). `label_videos` (labeling.py) is the focused one-at-a-time
+labeling stepper; this page is the "see the whole dataset" and "get videos
+in in the first place" counterpart."""
 from __future__ import annotations
 
 import re
 import uuid
 from pathlib import Path
 
-from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from .. import services
+from ..models import Dataset
 from ..paths import is_within_repo, resolve_repo_path
 
 _UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
@@ -25,28 +26,27 @@ def _safe_filename(name: str) -> str:
     return name or "video"
 
 
-def _redirect_to_dataset(video_dir_str: str, manifest_path_str: str):
-    url = f"{reverse('core:dataset_list')}?video_dir={video_dir_str}&manifest_path={manifest_path_str}"
+def _dataset_from_post(request) -> Dataset | None:
+    slug = request.POST.get("dataset")
+    return Dataset.objects.filter(slug=slug).first() if slug else None
+
+
+def _redirect_to_dataset(dataset_slug: str):
+    url = f"{reverse('core:dataset_list')}?dataset={dataset_slug}"
     return redirect(url)
 
 
 def dataset_list(request):
-    video_dir_str = request.GET.get("video_dir") or request.session.get("video_dir") or "data/raw"
-    manifest_path_str = (
-        request.GET.get("manifest_path") or request.session.get("manifest_path") or "data/manifest.csv"
-    )
-    request.session["video_dir"] = video_dir_str
-    request.session["manifest_path"] = manifest_path_str
+    dataset = services.datasets.resolve(request)
+    context = {"dataset": dataset, "datasets": Dataset.objects.all()}
 
-    video_dir = resolve_repo_path(video_dir_str)
-    manifest_path = resolve_repo_path(manifest_path_str)
+    if dataset is None:
+        context["known_labels"] = []
+        return render(request, "core/dataset_list.html", context)
 
-    context = {
-        "video_dir": video_dir_str,
-        "manifest_path": manifest_path_str,
-        "known_video_dirs": services.manifest.known_video_dirs(settings.DATA_DIR),
-        "known_manifest_paths": services.manifest.known_manifest_paths(settings.DATA_DIR),
-    }
+    context["video_dir"] = dataset.video_dir
+    video_dir = resolve_repo_path(dataset.video_dir)
+    manifest_path = resolve_repo_path(dataset.manifest_path)
 
     if not video_dir.exists():
         context["missing_dir"] = True
@@ -79,17 +79,19 @@ def upload_videos(request):
     if request.method != "POST":
         return redirect("core:dataset_list")
 
-    video_dir_str = request.POST.get("video_dir") or "data/raw"
-    manifest_path_str = request.POST.get("manifest_path") or "data/manifest.csv"
-    label = request.POST.get("label", "").strip()
+    dataset = _dataset_from_post(request)
+    if dataset is None:
+        messages.error(request, "Create a dataset first.")
+        return redirect("core:manage_datasets")
 
-    video_dir = resolve_repo_path(video_dir_str)
-    manifest_path = resolve_repo_path(manifest_path_str)
+    video_dir = resolve_repo_path(dataset.video_dir)
+    manifest_path = resolve_repo_path(dataset.manifest_path)
+    label = request.POST.get("label", "").strip()
 
     files = request.FILES.getlist("videos")
     if not files:
         messages.error(request, "Choose at least one video file to upload.")
-        return _redirect_to_dataset(video_dir_str, manifest_path_str)
+        return _redirect_to_dataset(dataset.slug)
 
     video_dir.mkdir(parents=True, exist_ok=True)
     manifest = services.manifest.load_manifest(manifest_path)
@@ -117,48 +119,66 @@ def upload_videos(request):
         suffix = f", labeled {label!r}" if label else " — label them on this page or on Label"
         messages.success(request, f"Uploaded {saved} video(s){suffix}.")
 
-    return _redirect_to_dataset(video_dir_str, manifest_path_str)
+    return _redirect_to_dataset(dataset.slug)
 
 
 def update_label(request):
     if request.method != "POST":
         return redirect("core:dataset_list")
 
-    video_dir_str = request.POST.get("video_dir", "data/raw")
-    manifest_path_str = request.POST.get("manifest_path", "data/manifest.csv")
-    label = request.POST.get("label", "").strip()
+    dataset = _dataset_from_post(request)
+    if dataset is None:
+        messages.error(request, "Create a dataset first.")
+        return redirect("core:manage_datasets")
 
+    label = request.POST.get("label", "").strip()
     if not label:
         messages.error(request, "Label can't be empty.")
-        return _redirect_to_dataset(video_dir_str, manifest_path_str)
+        return _redirect_to_dataset(dataset.slug)
 
-    manifest_path = resolve_repo_path(manifest_path_str)
+    manifest_path = resolve_repo_path(dataset.manifest_path)
     video_path = resolve_repo_path(request.POST["video_path"])
     manifest = services.manifest.load_manifest(manifest_path)
     services.manifest.set_label(manifest_path, manifest, video_path, label)
     messages.success(request, f"Labeled {video_path.name} as {label!r}.")
 
-    return _redirect_to_dataset(video_dir_str, manifest_path_str)
+    return _redirect_to_dataset(dataset.slug)
+
+
+def _optional_float(request, key):
+    raw = request.POST.get(key)
+    return float(raw) if raw not in (None, "") else None
 
 
 def delete_entry(request):
     if request.method != "POST":
         return redirect("core:dataset_list")
 
-    video_dir_str = request.POST.get("video_dir", "data/raw")
-    manifest_path_str = request.POST.get("manifest_path", "data/manifest.csv")
+    dataset = _dataset_from_post(request)
+    if dataset is None:
+        messages.error(request, "Create a dataset first.")
+        return redirect("core:manage_datasets")
+
     delete_file = request.POST.get("delete_file") == "on"
 
-    manifest_path = resolve_repo_path(manifest_path_str)
+    manifest_path = resolve_repo_path(dataset.manifest_path)
     video_path = resolve_repo_path(request.POST["video_path"])
 
     if delete_file and not is_within_repo(video_path):
         messages.error(request, "Refusing to delete a file outside the repo.")
-        return _redirect_to_dataset(video_dir_str, manifest_path_str)
+        return _redirect_to_dataset(dataset.slug)
+
+    # Absent when deleting the whole-video row (the default, from the inline
+    # edit table); present when deleting one labeled span from the list
+    # below it, so only that span's row is removed.
+    start_time = _optional_float(request, "start_time")
+    end_time = _optional_float(request, "end_time")
 
     manifest = services.manifest.load_manifest(manifest_path)
-    services.manifest.delete_entry(manifest_path, manifest, video_path, delete_file=delete_file)
+    services.manifest.delete_entry(
+        manifest_path, manifest, video_path, start_time=start_time, end_time=end_time, delete_file=delete_file
+    )
     suffix = " and deleted the file" if delete_file else ""
     messages.success(request, f"Removed {video_path.name} from the dataset{suffix}.")
 
-    return _redirect_to_dataset(video_dir_str, manifest_path_str)
+    return _redirect_to_dataset(dataset.slug)

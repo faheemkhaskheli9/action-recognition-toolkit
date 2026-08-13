@@ -151,7 +151,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Auth — every view is login-required by default (core.middleware.LoginRequiredMiddleware).
 LOGIN_URL = "core:login"
-LOGIN_REDIRECT_URL = "core:dataset_list"
+LOGIN_REDIRECT_URL = "core:home"
 LOGOUT_REDIRECT_URL = "core:login"
 
 # SESSION_COOKIE_AGE left at Django's 2-week default deliberately, not an

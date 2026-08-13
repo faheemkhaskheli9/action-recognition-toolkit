@@ -1,44 +1,116 @@
 {% extends "core/base.html" %}
 {% block title %}{{ run.name }}{% endblock %}
 {% block content %}
-<h1>{{ run.name }}</h1>
-<p>
-  <span class="status-pill status-{{ run.status }}" id="status-pill">{{ run.get_status_display }}</span>
-  <span class="muted">video_dir={{ run.video_dir }} output_dir={{ run.output_dir }} pid={{ run.pid }}</span>
-</p>
+<p class="muted mb-2"><a href="{% url 'core:extraction_list' %}">&larr; Extraction runs</a></p>
+<h1 class="mb-3">
+  {{ run.name }}
+  <span class="status-pill status-{{ run.status }}" id="status-pill" style="vertical-align:middle;" aria-live="polite">{{ run.get_status_display }}</span>
+</h1>
 
 <div class="card">
-  <strong>Clips written</strong>: <span id="clip-count">{{ clip_count|default:"—" }}</span>
-  {% if run.status == "succeeded" %}
-    <p class="muted">
-      Point the <a href="{% url 'core:label_videos' %}">Label page</a> at
-      <code>{{ run.output_dir }}</code> to label these clips next.
+  <dl class="meta-list mb-4">
+    <dt>Video dir</dt><dd><code>{{ run.video_dir }}</code></dd>
+    <dt>Output dir</dt><dd><code>{{ run.output_dir }}</code></dd>
+    <dt>Started</dt><dd title="{{ run.created_at }}">{{ run.created_at|timesince }} ago</dd>
+    {% if run.finished_at %}<dt>Finished</dt><dd title="{{ run.finished_at }}">{{ run.finished_at|timesince }} ago</dd>{% endif %}
+    <dt>Clips written</dt><dd><span id="clip-count">{{ clip_count|default:"—" }}</span></dd>
+  </dl>
+
+  <div id="progress-wrap"{% if not progress %} hidden{% endif %}>
+    <p class="muted mb-0" id="progress-text" aria-live="polite">
+      {% if progress %}Processing <strong>{{ progress.video }}</strong> &mdash; video {{ progress.current }} of {{ progress.total }}{% endif %}
     </p>
+    <div class="progress-bar mb-0">
+      <span id="progress-fill" style="width: {% if progress %}{% widthratio progress.current progress.total 100 %}{% else %}0{% endif %}%;"></span>
+    </div>
+  </div>
+
+  {% if run.status == "failed" %}
+    <div class="actions">
+      <form method="post" action="{% url 'core:resume_extraction' run.pk %}">
+        {% csrf_token %}
+        <button type="submit">Resume extraction</button>
+      </form>
+      <p class="muted m-0">
+        Picks up where this run stopped — videos already fully extracted are
+        skipped, and any partial clips left from a video that didn't finish
+        are discarded and redone.
+      </p>
+    </div>
+  {% endif %}
+  {% if run.status == "succeeded" %}
+    <div class="actions">
+      <form method="post" action="{% url 'core:import_extraction_clips' run.pk %}">
+        {% csrf_token %}
+        <button type="submit">Import clips into dataset</button>
+      </form>
+      <p class="muted m-0">
+        Copies clips from <code>{{ run.output_dir }}</code> into
+        <code>data/raw</code> so they show up on
+        <a href="{% url 'core:label_videos' %}">Label</a> and
+        <a href="{% url 'core:dataset_list' %}">Dataset</a>. Safe to click
+        again after a later run — already-imported clips are skipped. (Or run
+        <code>ar-build-manifest</code> straight against
+        <code>{{ run.output_dir }}</code> from the CLI instead.)
+      </p>
+    </div>
   {% endif %}
 </div>
 
-<h2>Log</h2>
-<pre class="log" id="log">{{ log_tail }}</pre>
-
-{% if run.status == "running" %}
-<script>
-  const logEl = document.getElementById("log");
-  const pillEl = document.getElementById("status-pill");
-  const countEl = document.getElementById("clip-count");
-  async function poll() {
-    const res = await fetch("{% url 'core:extraction_log_partial' run.pk %}");
-    const data = await res.json();
-    logEl.textContent = data.log_tail;
-    logEl.scrollTop = logEl.scrollHeight;
-    countEl.textContent = data.clip_count ?? "—";
-    if (data.status !== "running") {
-      pillEl.textContent = data.status;
-      pillEl.className = "status-pill status-" + data.status;
-      return;
-    }
-    setTimeout(poll, 3000);
-  }
-  setTimeout(poll, 3000);
-</script>
+{% if results %}
+  <h2 class="mb-2">Results</h2>
+  <p class="muted">
+    {{ results|length }} video{{ results|length|pluralize }} processed into
+    {{ clip_count|default:"—" }} clip{{ clip_count|pluralize }}.
+    {% if run.status == "running" %}Updates as the run progresses — reload to refresh.{% endif %}
+  </p>
+  {% for video in results %}
+    <details class="card result-video" open>
+      <summary class="result-summary">
+        {{ video.name }}
+        <span class="muted" style="font-weight:400;">
+          &mdash; {{ video.track_count }} track{{ video.track_count|pluralize }},
+          {{ video.clip_count }} clip{{ video.clip_count|pluralize }}
+        </span>
+      </summary>
+      {% for track in video.tracks %}
+        <h3 class="result-track-title">Track {{ track.track_id }}</h3>
+        <div class="table-wrap responsive-stack">
+          <table>
+            <thead>
+              <tr>
+                <th>Clip</th>
+                <th>Frames</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for clip in track.clips %}
+                <tr>
+                  <td data-label="Clip">
+                    <div class="video-cell">
+                      <video class="thumb" preload="metadata" muted playsinline>
+                        <source src="{% url 'core:serve_video' %}?path={{ clip.clip_path|urlencode }}#t=0.1">
+                      </video>
+                      <a href="{% url 'core:serve_video' %}?path={{ clip.clip_path|urlencode }}" target="_blank">{{ clip.name }}</a>
+                    </div>
+                  </td>
+                  <td data-label="Frames">{{ clip.start_frame }}&ndash;{{ clip.end_frame }} ({{ clip.num_frames }})</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </details>
+  {% endfor %}
+{% elif run.status == "succeeded" %}
+  <h2 class="mb-2">Results</h2>
+  <p class="muted">This run finished without producing any clips.</p>
 {% endif %}
+
+<div class="log-toolbar">
+  <h2 class="m-0">Log</h2>
+  <button type="button" class="ghost" data-copy-target="log">Copy log</button>
+</div>
+<pre class="log" id="log" aria-live="polite"{% if run.status == "running" %} data-log-poll-url="{% url 'core:extraction_log_partial' run.pk %}"{% endif %}>{{ log_tail }}</pre>
 {% endblock %}

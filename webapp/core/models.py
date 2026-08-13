@@ -1,6 +1,29 @@
 from django.db import models
 
 
+class Dataset(models.Model):
+    """A named collection of videos with its own video folder and manifest
+    CSV -- the grouping unit the Dataset/Label/Review pages operate within,
+    and what extraction runs against (either every video under `video_dir`,
+    or one video from it). Replaces the app's old scheme of one fixed
+    `data/raw` folder shared by everything, with only the manifest CSV
+    varying per session (see migration 0003_dataset, which preserves that
+    old scheme's paths as one Dataset named "Default" so existing installs
+    keep working)."""
+
+    name = models.CharField(max_length=200, unique=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    video_dir = models.CharField(max_length=500)
+    manifest_path = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class TrackExtractionRun(models.Model):
     """One `ar-extract-tracks` invocation, launched as a background OS
     process — same liveness-tracking trade-offs as TrainingRun below (a
@@ -15,7 +38,13 @@ class TrackExtractionRun(models.Model):
 
     name = models.CharField(max_length=255)
     config_path = models.CharField(max_length=500)
+    # The path actually handed to ar-extract-tracks -- either `dataset`'s own
+    # video_dir (a whole-dataset run) or a single video file path within it
+    # (a single-video run). See services.extraction.start_run.
     video_dir = models.CharField(max_length=500)
+    dataset = models.ForeignKey(
+        Dataset, null=True, blank=True, on_delete=models.SET_NULL, related_name="extraction_runs"
+    )
     output_dir = models.CharField(max_length=500)
     log_file = models.CharField(max_length=500)
 

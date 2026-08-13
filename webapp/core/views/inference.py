@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import render
+from django.utils.text import get_valid_filename
 
 from .. import services
 from ..forms import InferenceForm
@@ -13,9 +13,14 @@ from ..paths import is_within_repo, resolve_repo_path
 
 
 def _save_upload(uploaded_file) -> Path:
+    """Save an uploaded video to a fixed, name-derived path under media/uploads/.
+
+    Re-uploading a video with the same filename overwrites the previous copy at
+    the same path rather than accumulating a new randomly-named file each time.
+    """
     upload_dir = settings.MEDIA_ROOT / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
-    dest = upload_dir / f"{uuid.uuid4().hex}_{uploaded_file.name}"
+    dest = upload_dir / get_valid_filename(uploaded_file.name)
     with open(dest, "wb") as f:
         for chunk in uploaded_file.chunks():
             f.write(chunk)
@@ -35,9 +40,8 @@ def inference(request):
             checkpoint_path = Path(form.cleaned_data["checkpoint"])
             uploaded = form.cleaned_data["video"]
 
-            tmp_path = None
             if uploaded:
-                video_path = tmp_path = _save_upload(uploaded)
+                video_path = _save_upload(uploaded)
             else:
                 video_path = resolve_repo_path(form.cleaned_data["existing_video"])
                 if not is_within_repo(video_path) or not video_path.is_file():
@@ -54,9 +58,6 @@ def inference(request):
                         )
                 except Exception as exc:
                     messages.error(request, f"Prediction failed: {exc}")
-                finally:
-                    if tmp_path is not None:
-                        tmp_path.unlink(missing_ok=True)
     else:
         form = InferenceForm(checkpoint_choices=checkpoint_choices)
 

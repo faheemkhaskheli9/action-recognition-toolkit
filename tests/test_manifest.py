@@ -90,3 +90,38 @@ def test_stratified_split_rejects_fractions_summing_past_one():
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_manifest_roundtrip_preserves_span_columns(tmp_path):
+    df = pd.DataFrame(
+        {
+            "video_path": ["/a.mp4", "/a.mp4"],
+            "label": ["idle", "jump"],
+            "start_time": [None, 2.0],
+            "end_time": [None, 3.0],
+        }
+    )
+    path = tmp_path / "manifest.csv"
+
+    write_manifest(df, path)
+    loaded = read_manifest(path)
+
+    assert loaded.loc[1, "start_time"] == 2.0
+    assert loaded.loc[1, "end_time"] == 3.0
+    assert pd.isna(loaded.loc[0, "start_time"])
+
+
+def test_stratified_split_preserves_span_columns_untouched():
+    df = pd.DataFrame(
+        {
+            "video_path": [f"/v{i}.mp4" for i in range(10)],
+            "label": ["jump"] * 5 + ["wave"] * 5,
+            "start_time": [1.0] * 10,
+            "end_time": [2.0] * 10,
+        }
+    )
+
+    split_df = stratified_split(df, val_frac=0.2, test_frac=0.2, seed=0)
+
+    assert (split_df["start_time"] == 1.0).all()
+    assert (split_df["end_time"] == 2.0).all()
