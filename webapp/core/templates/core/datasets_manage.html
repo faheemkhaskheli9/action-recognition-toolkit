@@ -1,0 +1,57 @@
+{% extends "core/base.html" %}
+{% block title %}Manage datasets{% endblock %}
+{% block content %}
+<h1>Datasets</h1>
+<p class="muted">
+  A dataset is its own folder of videos plus its own manifest — the Dataset,
+  Label, Review manifest, and Extract tracks pages all work within whichever
+  one you pick.
+</p>
+
+<div class="card">
+  <h2 class="mt-0">Create a dataset</h2>
+  <form method="post">
+    {% csrf_token %}
+    <div class="field">
+      <label>Name</label>
+      <input type="text" name="name" required autofocus placeholder="e.g. Restaurant floor, June intake">
+    </div>
+    <button type="submit">Create dataset</button>
+  </form>
+</div>
+
+{% if rows %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Videos</th>
+      <th>Created</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><a href="{% url 'core:dataset_list' %}?dataset={{ row.dataset.slug }}">{{ row.dataset.name }}</a></td>
+      <td>{{ row.video_count }}</td>
+      <td>{{ row.dataset.created_at|date:"Y-m-d" }}</td>
+      <td>
+        <form method="post" action="{% url 'core:delete_dataset' pk=row.dataset.pk %}" onsubmit="return confirm('Delete dataset {{ row.dataset.name }}?');">
+          {% csrf_token %}
+          <label class="muted fw-normal row-flex-sm">
+            <input type="checkbox" name="delete_files" class="w-auto"> also delete its videos/manifest
+          </label>
+          <button type="submit" class="danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+  <div class="empty-state">No datasets yet — create one above.</div>
+{% endif %}
+{% endblock %}

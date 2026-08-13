@@ -1,33 +1,81 @@
 {% extends "core/base.html" %}
 {% block title %}Dataset{% endblock %}
 {% block content %}
-<h1>Dataset</h1>
+<h1>Dataset{% if dataset %}: {{ dataset.name }}{% endif %}</h1>
+
+<details class="card" data-persist-key="dataset" open>
+  <summary class="howto-summary">How this works</summary>
+  <p class="muted">Training a custom action-recognition model, start to finish:</p>
+  <ol class="howto-steps">
+    <li>
+      <div>
+        <strong>Raw footage with more than one person in frame</strong> (a
+        restaurant, warehouse, retail floor, anything)? Upload it to a
+        dataset here, then run
+        <a href="{% url 'core:start_extraction' %}">Extract tracks</a> —
+        it detects and tracks every person and crops one clip per tracked
+        person into <code>data/tracks/&lt;video&gt;/</code>, either for
+        every video in the dataset or just one you pick. Once the run
+        finishes, use its "Import clips into dataset" button to copy the
+        extracted clips back into a dataset before labeling (or run
+        <code>ar-build-manifest</code> straight against the
+        <code>data/tracks/&lt;video&gt;/</code> folder from the CLI instead).
+        Already have clips trimmed to one person each? Skip straight to
+        labeling.
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Label</strong> every clip with whatever action taxonomy fits
+        your scenario (staff tasks, customer behavior, anything you define) —
+        upload and label right here on this page, or use the
+        <a href="{% url 'core:label_videos' %}?dataset={{ dataset.slug }}">Label</a>
+        page to go through unlabeled clips one at a time. Got a longer
+        recording where the action is only part of it? The Label page also
+        lets you mark one or more labeled spans (a start/end time) instead of
+        labeling the whole file at once.
+      </div>
+    </li>
+    <li>
+      <div>
+        <a href="{% url 'core:review_manifest' %}">Review manifest</a> any
+        time to fix or delete labels you've already saved.
+      </div>
+    </li>
+    <li>
+      <div>
+        <a href="{% url 'core:start_training' %}">Train</a> a model once
+        you've got labeled clips across at least two classes.
+      </div>
+    </li>
+    <li>
+      <div>
+        <a href="{% url 'core:inference' %}">Inference</a> a finished
+        checkpoint on a new video — tick "scene mode" if that video also has
+        multiple people, to get a separate prediction per tracked person
+        instead of one label for the whole clip.
+      </div>
+    </li>
+  </ol>
+</details>
+
 <p class="muted">
   Upload videos, see what's in your dataset, and fix labels — all in one place.
   Prefer labeling one at a time? Use the
-  <a href="{% url 'core:label_videos' %}?video_dir={{ video_dir|urlencode }}&manifest_path={{ manifest_path|urlencode }}">Label</a> page.
+  <a href="{% url 'core:label_videos' %}?dataset={{ dataset.slug }}">Label</a> page.
 </p>
 
-<div class="card">
-  <form method="get">
-    <div class="field">
-      <label>Video folder</label>
-      <input type="text" name="video_dir" value="{{ video_dir }}">
-    </div>
-    <div class="field">
-      <label>Manifest file</label>
-      <input type="text" name="manifest_path" value="{{ manifest_path }}">
-    </div>
-    <button type="submit">Use this folder</button>
-  </form>
-</div>
+{% include "core/_dataset_picker.html" %}
+
+{% if not dataset %}
+  <div class="empty-state">No datasets yet — <a href="{% url 'core:manage_datasets' %}">create one</a> to get started.</div>
+{% else %}
 
 <div class="card">
   <h2>Upload videos</h2>
-  <form method="post" action="{% url 'core:upload_videos' %}" enctype="multipart/form-data">
+  <form method="post" action="{% url 'core:upload_videos' %}" enctype="multipart/form-data" data-upload-progress>
     {% csrf_token %}
-    <input type="hidden" name="video_dir" value="{{ video_dir }}">
-    <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
+    <input type="hidden" name="dataset" value="{{ dataset.slug }}">
     <div class="field">
       <label>Video file(s)</label>
       <input type="file" name="videos" accept=".mp4,.avi,.mov,.mkv,.webm" multiple required>
@@ -41,11 +89,13 @@
       </datalist>
     </div>
     <button type="submit">Upload</button>
+    <div class="progress-bar" data-upload-progress-bar hidden><span></span></div>
+    <p class="muted" data-upload-progress-text hidden></p>
   </form>
 </div>
 
 {% if missing_dir %}
-  <p class="muted">{{ video_dir }} doesn't exist yet — upload a video above to create it.</p>
+  <div class="empty-state">{{ video_dir }} doesn't exist yet — upload a video above to create it.</div>
 {% else %}
   <p class="muted">
     {{ total }} video{{ total|pluralize }} in {{ video_dir }} &mdash;
@@ -58,7 +108,9 @@
   </p>
 
   {% if rows %}
-  <table>
+  <input type="search" class="table-filter" data-table-filter="#dataset-table" placeholder="Filter by name or label…">
+  <div class="table-wrap responsive-stack">
+  <table id="dataset-table">
     <thead>
       <tr>
         <th>Video</th>
@@ -69,39 +121,63 @@
     <tbody>
       {% for row in rows %}
       <tr>
-        <td>
-          <a href="{% url 'core:serve_video' %}?path={{ row.path|urlencode }}" target="_blank">{{ row.name }}</a>
-          {% if row.split %}<br><span class="muted">split: {{ row.split }}</span>{% endif %}
-          {% if not row.labeled %}<br><span class="muted">unlabeled</span>{% endif %}
+        <td data-label="Video">
+          <div class="video-cell">
+            <video class="thumb" preload="metadata" muted playsinline>
+              <source src="{% url 'core:serve_video' %}?path={{ row.path|urlencode }}#t=0.5">
+            </video>
+            <div>
+              <a href="{% url 'core:serve_video' %}?path={{ row.path|urlencode }}" target="_blank">{{ row.name }}</a>
+              {% if row.split %}<br><span class="badge split-{{ row.split }}">{{ row.split }}</span>{% endif %}
+              {% if not row.labeled %}<br><span class="muted">unlabeled</span>{% endif %}
+              {% if row.spans %}
+                <ul class="span-list">
+                  {% for span in row.spans %}
+                    <li class="muted">
+                      {{ span.label }} ({{ span.start_display }}&ndash;{{ span.end_display }})
+                      <form method="post" action="{% url 'core:delete_entry' %}" class="inline-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="video_path" value="{{ row.path }}">
+                        <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+                        <input type="hidden" name="start_time" value="{{ span.start_time }}">
+                        <input type="hidden" name="end_time" value="{{ span.end_time }}">
+                        <button type="submit" class="ghost span-remove-btn">&times;</button>
+                      </form>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </div>
+          </div>
         </td>
-        <td>
-          <form method="post" action="{% url 'core:update_label' %}" style="display:flex; gap:.5rem; align-items:flex-start;">
+        <td data-label="Label">
+          <form method="post" action="{% url 'core:update_label' %}" class="row-flex-start">
             {% csrf_token %}
             <input type="hidden" name="video_path" value="{{ row.path }}">
-            <input type="hidden" name="video_dir" value="{{ video_dir }}">
-            <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
+            <input type="hidden" name="dataset" value="{{ dataset.slug }}">
             <input type="text" name="label" value="{{ row.label }}" list="known-labels" placeholder="unlabeled" required>
             <button type="submit">Save</button>
           </form>
         </td>
-        <td>
+        <td data-label="Delete">
           <form method="post" action="{% url 'core:delete_entry' %}" onsubmit="return confirm('Remove {{ row.name }} from the dataset?');">
             {% csrf_token %}
             <input type="hidden" name="video_path" value="{{ row.path }}">
-            <input type="hidden" name="video_dir" value="{{ video_dir }}">
-            <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
-            <label class="muted" style="display:flex; align-items:center; gap:.35rem; font-weight:400;">
-              <input type="checkbox" name="delete_file" style="width:auto;"> also delete file
+            <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+            <label class="muted fw-normal row-flex-sm">
+              <input type="checkbox" name="delete_file" class="w-auto"> also delete file
             </label>
-            <button type="submit" class="secondary">Delete</button>
+            <button type="submit" class="danger">Delete</button>
           </form>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}
-    <p class="muted">No videos yet — upload some above.</p>
+    <div class="empty-state">No videos yet — upload some above.</div>
   {% endif %}
+{% endif %}
 {% endif %}
 {% endblock %}

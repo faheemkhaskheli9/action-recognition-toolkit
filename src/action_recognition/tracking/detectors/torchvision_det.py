@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torchvision
 
+from ...utils.device import resolve_device
 from ..types import Detection
 from .registry import register_detector
 
@@ -30,7 +31,7 @@ class FasterRCNNPersonDetector:
         )
         self.model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn(weights=weights)
         self.model.eval()
-        self.device = torch.device(device) if device else torch.device("cpu")
+        self.device = resolve_device(device)
         self.model.to(self.device)
         self.score_thresh = score_thresh
 

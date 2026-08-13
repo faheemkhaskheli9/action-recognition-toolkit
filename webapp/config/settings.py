@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -23,16 +24,23 @@ CONFIGS_DIR = REPO_ROOT / "configs"
 RUNS_DIR = REPO_ROOT / "runs"
 
 
-# Quick-start development settings - unsuitable for production
+# Every security-sensitive setting below reads from the environment with a
+# `runserver`-on-localhost-friendly default, so the existing dev workflow
+# (`python manage.py runserver`, no env vars set) keeps working unchanged.
+# Set these three env vars for any deployment reachable by someone other
+# than the operator at their own keyboard — this app now handles camera
+# credentials and person-identifying data, not just local training runs.
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-9g6om&)^df#kj#j8u%)j9(iqgi+9v0(1=e2!93k*@-=@ce#z#^"
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY", "django-insecure-9g6om&)^df#kj#j8u%)j9(iqgi+9v0(1=e2!93k*@-=@ce#z#^"
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if h]
 
 
 # Application definition
@@ -55,6 +63,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Everything below requires a login by default; see core/middleware.py
+    # for the small allowlist (login page, static files, /admin/).
+    "core.middleware.LoginRequiredMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -136,3 +147,26 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# Auth — every view is login-required by default (core.middleware.LoginRequiredMiddleware).
+LOGIN_URL = "core:login"
+LOGIN_REDIRECT_URL = "core:home"
+LOGOUT_REDIRECT_URL = "core:login"
+
+# SESSION_COOKIE_AGE left at Django's 2-week default deliberately, not an
+# oversight: single-operator deployment, no public signup, low value in
+# forcing frequent re-logins. Same posture for login rate-limiting/lockout,
+# which isn't implemented at all yet -- both are worth revisiting if this
+# ever moves to multi-user (see docs/plans/app-ux-permissions-security-scalability.md).
+
+# Transport/cookie security only makes sense once this is actually served
+# over HTTPS behind a real web server — forcing it under `runserver` (which
+# is plain HTTP) would just lock everyone out of local dev.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True

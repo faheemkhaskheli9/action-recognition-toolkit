@@ -1,26 +1,91 @@
 {% extends "core/base.html" %}
 {% block title %}Extract tracks{% endblock %}
 {% block content %}
-<h1>Detect + track people in raw video</h1>
+<div class="row-flex">
+  <h1 class="mb-1">Detect + track people in raw video</h1>
+  <a href="{% url 'core:extraction_list' %}" class="muted">View past runs &rarr;</a>
+</div>
 <p class="muted">
-  Turns a folder of raw multi-person videos into single-person clips (one
-  file per tracked person, per short time window) under
-  <code>data/tracks/&lt;name&gt;/</code> — point the Label page at that
-  folder afterwards to label them with whatever taxonomy fits your
-  scenario, then train as usual.
+  For raw footage with more than one person in frame — a restaurant,
+  warehouse, retail floor, anything. Skip this and go straight to
+  <a href="{% url 'core:label_videos' %}">Label</a> if your clips already
+  have one person each.
 </p>
 
-<form method="post" class="card">
+<details class="card" data-persist-key="extraction" open>
+  <summary class="howto-summary">How this works</summary>
+  <ol class="howto-steps">
+    <li>
+      <div>
+        <strong>Detect</strong> — every frame of every video in the chosen
+        dataset (or just the one video you pick below) is scanned for
+        people.
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Track</strong> — detections are linked across frames into
+        one track per person, so the same person keeps one identity as they
+        move through the shot.
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Crop</strong> — each track is cut into short, overlapping
+        time windows and cropped to that person, written as one clip file
+        per person per window under <code>data/tracks/&lt;name&gt;/</code>.
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Import</strong> — once the run finishes, its detail page has
+        an "Import clips into dataset" button that copies the clips back
+        into a dataset (the source dataset by default), where Label and
+        Dataset read/write. (Or run <code>ar-build-manifest</code> straight
+        against <code>data/tracks/&lt;name&gt;/</code> from the CLI
+        instead.) From there, label and train as usual.
+      </div>
+    </li>
+  </ol>
+</details>
+
+{% if not dataset %}
+  <div class="empty-state">No datasets yet — <a href="{% url 'core:manage_datasets' %}">create one</a> and upload some raw footage to it first.</div>
+{% else %}
+<form method="post" class="card" data-submit-once="Starting…">
   {% csrf_token %}
-  {% for field in form %}
-    <div class="field">
-      {{ field.label_tag }}
-      {{ field }}
-      {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
-      {{ field.errors }}
-    </div>
-  {% endfor %}
+  {% if form.non_field_errors %}<p class="error">{{ form.non_field_errors|join:" " }}</p>{% endif %}
+  <div class="field">
+    {{ form.name.label_tag }}
+    {{ form.name }}
+    {% if form.name.help_text %}<div class="helptext">{{ form.name.help_text }}</div>{% endif %}
+    {{ form.name.errors }}
+  </div>
+  <div class="field">
+    {{ form.dataset.label_tag }}
+    <select name="dataset" id="{{ form.dataset.id_for_label }}" required onchange="location.search = '?dataset=' + encodeURIComponent(this.value);">
+      {% for ds in form.dataset.field.queryset %}
+        <option value="{{ ds.slug }}" {% if dataset.pk == ds.pk %}selected{% endif %}>{{ ds.name }}</option>
+      {% endfor %}
+    </select>
+    <div class="helptext">{{ form.dataset.help_text }} Switching datasets here reloads the page to refresh the video picker below.</div>
+    {{ form.dataset.errors }}
+  </div>
+  <div class="field">
+    {{ form.video.label_tag }}
+    {{ form.video }}
+    <div class="helptext">{{ form.video.help_text }}</div>
+    {{ form.video.errors }}
+  </div>
+  <div class="field">
+    {{ form.config.label_tag }}
+    {{ form.config }}
+    {% if form.config.help_text %}<div class="helptext">{{ form.config.help_text }}</div>{% endif %}
+    {{ form.config.errors }}
+  </div>
+  {{ known_videos|json_script:"known-videos-data" }}
   <button type="submit">Start extraction</button>
+  <span class="muted ml-2">Launches as a background process; you'll be redirected to its live log.</span>
 </form>
-<p class="muted">Runs launch as a background process; you'll be redirected to its live log.</p>
+{% endif %}
 {% endblock %}

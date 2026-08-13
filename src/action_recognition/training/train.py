@@ -12,6 +12,7 @@ from action_recognition.data.manifest import build_label_map, load_label_map, re
 from action_recognition.models import build_model
 from action_recognition.training.engine import run_epoch
 from action_recognition.utils.checkpoint import load_checkpoint, save_checkpoint
+from action_recognition.utils.device import resolve_device
 from action_recognition.utils.logging import get_logger
 from action_recognition.utils.seed import set_seed
 
@@ -71,16 +72,6 @@ def apply_cli_overrides(config: dict, args: argparse.Namespace) -> dict:
     if args.device is not None:
         config["train"]["device"] = args.device
     return config
-
-
-def resolve_device(requested: str | None) -> torch.device:
-    if requested:
-        return torch.device(requested)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
 
 
 def main() -> None:
