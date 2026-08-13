@@ -1,3 +1,3 @@
-from . import extraction, inference, manifest, training
+from . import datasets, extraction, inference, manifest, training
 
-__all__ = ["extraction", "inference", "manifest", "training"]
+__all__ = ["datasets", "extraction", "inference", "manifest", "training"]

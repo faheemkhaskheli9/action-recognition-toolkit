@@ -77,3 +77,15 @@ def test_is_pid_alive_true_for_running_process_false_after_it_exits(tmp_path):
 
 def test_is_pid_alive_false_for_none():
     assert _background.is_pid_alive(None) is False
+
+
+def test_launch_detached_append_keeps_prior_log_content(tmp_path):
+    log_file = tmp_path / "run.log"
+    log_file.write_text("previous attempt's output\n")
+    argv = [sys.executable, "-c", "print('hello from resumed run')"]
+
+    _background.launch_detached(argv, log_file=log_file, exit_marker_prefix="EXIT:", cwd=tmp_path, append=True)
+
+    text = _wait_for_marker(log_file, "EXIT:")
+    assert "previous attempt's output" in text
+    assert "hello from resumed run" in text

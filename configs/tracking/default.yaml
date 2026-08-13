@@ -6,6 +6,7 @@ detector:
   name: fasterrcnn              # see action_recognition.tracking.detectors.available_detectors()
   params:
     score_thresh: 0.6            # minimum detection confidence kept as a person box
+    device: null                 # cpu | cuda | mps; autodetected (cuda > mps > cpu) if unset
 
 tracker:
   name: iou                     # see action_recognition.tracking.trackers.available_trackers()
