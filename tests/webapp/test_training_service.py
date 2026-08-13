@@ -1,10 +1,17 @@
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from core.models import TrainingRun
 from core.services import training as training_service
+
+# `true` is a POSIX coreutil, not a Windows executable -- it only resolves
+# here by accident when something upstream put Git for Windows' usr/bin on
+# PATH. Spawn a real short-lived process the same way on every platform
+# instead: the current interpreter running a no-op script.
+_NOOP_COMMAND = [sys.executable, "-c", "pass"]
 
 
 # --------------------------------------------------------------------- #
@@ -116,7 +123,7 @@ def test_is_pid_alive_true_for_current_process():
 
 
 def test_is_pid_alive_false_once_process_has_exited():
-    proc = subprocess.Popen(["true"])
+    proc = subprocess.Popen(_NOOP_COMMAND)
     proc.wait()
 
     assert training_service.is_pid_alive(proc.pid) is False
@@ -168,7 +175,7 @@ def test_refresh_status_reads_nonzero_exit_marker_as_failed(tmp_path):
 
 @pytest.mark.django_db
 def test_refresh_status_marks_failed_when_process_died_without_marker(tmp_path):
-    proc = subprocess.Popen(["true"])
+    proc = subprocess.Popen(_NOOP_COMMAND)
     proc.wait()
     log_file = tmp_path / "train.log"
     log_file.write_text("some partial output, no marker\n")
