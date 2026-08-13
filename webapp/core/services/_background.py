@@ -30,6 +30,7 @@ import ctypes
 import os
 import shlex
 import subprocess
+import threading
 from pathlib import Path
 
 
@@ -71,6 +72,17 @@ def launch_detached(
             cwd=cwd,
             start_new_session=True,
         )
+        # We never otherwise wait()/poll() this Popen -- callers only learn
+        # about the run again via is_pid_alive(pid) or the exit-marker line,
+        # potentially from a different process entirely. Left unreaped, the
+        # wrapper becomes a zombie the moment it exits, and a zombie still
+        # answers os.kill(pid, 0) successfully (it's unreaped, not gone), so
+        # is_pid_alive would report it alive forever. Reap it in the
+        # background as soon as it exits so the pid actually frees up; this
+        # doesn't affect the child's detachment (start_new_session already
+        # means it survives this process exiting, at which point init
+        # reparents and reaps it instead).
+        threading.Thread(target=proc.wait, daemon=True).start()
     return proc.pid
 
 
