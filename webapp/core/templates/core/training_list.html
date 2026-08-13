@@ -5,6 +5,7 @@
 <p><a href="{% url 'core:start_training' %}" class="btn">+ New run</a></p>
 
 {% if runs %}
+<div class="table-wrap">
 <table>
   <thead>
     <tr><th>Name</th><th>Model</th><th>Status</th><th>Started</th><th></th></tr>
@@ -12,16 +13,19 @@
   <tbody>
     {% for run in runs %}
     <tr>
-      <td>{{ run.name }}</td>
+      <td><a href="{% url 'core:run_detail' run.pk %}">{{ run.name }}</a></td>
       <td>{{ run.model_name }}</td>
       <td><span class="status-pill status-{{ run.status }}">{{ run.get_status_display }}</span></td>
-      <td>{{ run.created_at }}</td>
+      <td class="muted" title="{{ run.created_at }}">{{ run.created_at|timesince }} ago</td>
       <td><a href="{% url 'core:run_detail' run.pk %}">View</a></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
-  <p class="muted">No training runs yet.</p>
+  <div class="empty-state">
+    No training runs yet — <a href="{% url 'core:start_training' %}">start one</a> once you have labeled clips.
+  </div>
 {% endif %}
 {% endblock %}

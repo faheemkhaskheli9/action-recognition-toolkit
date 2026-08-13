@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django import forms
 
+from .models import Dataset
 from .services import extraction as extraction_service
 from .services import training as training_service
 
@@ -11,10 +12,22 @@ class StartExtractionForm(forms.Form):
         max_length=100,
         help_text="Used as the output folder name under data/tracks/ — letters, numbers, hyphens.",
     )
-    video_dir = forms.CharField(
-        initial="data/raw_scenes",
-        help_text="Folder of raw multi-person videos to detect+track (searched recursively).",
-        widget=forms.TextInput(attrs={"list": "known-video-dirs", "autocomplete": "off"}),
+    dataset = forms.ModelChoiceField(
+        queryset=Dataset.objects.order_by("name"),
+        to_field_name="slug",
+        help_text="Detect+track every video in this dataset, or pick one below to run on just that video.",
+    )
+    video = forms.CharField(
+        required=False,
+        help_text="Optional — run on just this one video from the dataset instead of every video in it.",
+        widget=forms.TextInput(
+            attrs={
+                "data-picker": "known-videos-data",
+                "data-picker-value-key": "path",
+                "data-picker-label-key": "name",
+                "autocomplete": "off",
+            }
+        ),
     )
     config = forms.ChoiceField(
         required=False, help_text="Tracking config from configs/tracking/; defaults to default.yaml"
@@ -36,7 +49,7 @@ class StartTrainingForm(forms.Form):
         required=False,
         initial="data/manifest.csv",
         help_text="Overrides data.manifest",
-        widget=forms.TextInput(attrs={"list": "known-manifests", "autocomplete": "off"}),
+        widget=forms.TextInput(attrs={"data-picker": "known-manifests-data", "autocomplete": "off"}),
     )
     model_name = forms.CharField(
         required=False, help_text="Overrides model.name, e.g. cnn_lstm or r3d18"
@@ -57,6 +70,12 @@ class ManifestRowForm(forms.Form):
         choices=[("", "—"), ("train", "train"), ("val", "val"), ("test", "test")],
         required=False,
     )
+    # Round-tripped unedited -- editing a span's start/end belongs to the
+    # Label page's scrubber, not this table. span_display is a read-only
+    # mm:ss-mm:ss label for the template; it isn't saved back.
+    start_time = forms.CharField(required=False, widget=forms.HiddenInput())
+    end_time = forms.CharField(required=False, widget=forms.HiddenInput())
+    span_display = forms.CharField(required=False, widget=forms.HiddenInput())
 
 
 ManifestFormSet = forms.formset_factory(ManifestRowForm, extra=0, can_delete=True)
@@ -70,7 +89,14 @@ class InferenceForm(forms.Form):
     existing_video = forms.CharField(
         required=False,
         help_text="Or pick a video already in your dataset (data/raw, data/tracks/...) instead of uploading.",
-        widget=forms.TextInput(attrs={"list": "known-videos", "autocomplete": "off"}),
+        widget=forms.TextInput(
+            attrs={
+                "data-picker": "known-videos-data",
+                "data-picker-value-key": "path",
+                "data-picker-label-key": "name",
+                "autocomplete": "off",
+            }
+        ),
     )
     top_k = forms.IntegerField(initial=3, min_value=1, max_value=10)
     scene_mode = forms.BooleanField(

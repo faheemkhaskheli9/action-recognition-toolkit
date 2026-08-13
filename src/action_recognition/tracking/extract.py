@@ -10,13 +10,24 @@ already-trained checkpoint).
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 import cv2
 
+from ..utils.logging import get_logger
 from .types import Box, Track
+
+logger = get_logger(__name__)
+
+# How often (wall-clock seconds) track_video/extract_tracks_to_clips emit a
+# progress line for a video/clip loop that can otherwise run silently for a
+# long time (large source videos, many tracks) -- see extract_tracks.py's
+# module docstring / CLAUDE.md for why the webapp can only show real
+# progress if the underlying pipeline actually logs it.
+PROGRESS_LOG_INTERVAL_SECONDS = 15.0
 
 
 @dataclass
@@ -33,12 +44,20 @@ class TrackWindow:
 def track_video(video_path: str, detector, tracker, frame_stride: int = 2) -> list[Track]:
     """Run `detector` + `tracker` over every `frame_stride`-th frame of
     `video_path`, in order, and return every track produced (active tracks
-    flushed once the video ends)."""
+    flushed once the video ends).
+
+    Logs a percent-complete line every ~15s -- this is the phase that can
+    dominate wall-clock time for a large source video, and without it
+    nothing gets written to the log (or the video's clip folder) until
+    detection finishes, which reads as a hang even when it isn't one.
+    """
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise IOError(f"Could not open video: {video_path}")
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or None
     try:
         frame_idx = 0
+        last_log = time.monotonic()
         ok, frame = cap.read()
         while ok:
             if frame_idx % frame_stride == 0:
@@ -46,10 +65,20 @@ def track_video(video_path: str, detector, tracker, frame_stride: int = 2) -> li
                 detections = detector.detect(rgb)
                 tracker.update(frame_idx, detections)
             frame_idx += 1
+            now = time.monotonic()
+            if now - last_log >= PROGRESS_LOG_INTERVAL_SECONDS:
+                last_log = now
+                if total_frames:
+                    pct = 100 * frame_idx / total_frames
+                    logger.info(f"  detect+track: frame {frame_idx}/{total_frames} ({pct:.0f}%)")
+                else:
+                    logger.info(f"  detect+track: frame {frame_idx}")
             ok, frame = cap.read()
     finally:
         cap.release()
-    return tracker.finished_tracks()
+    tracks = tracker.finished_tracks()
+    logger.info(f"  detect+track done: {len(tracks)} track(s) found")
+    return tracks
 
 
 def windows_for_track(
@@ -189,27 +218,36 @@ def extract_tracks_to_clips(
     tracks = track_video(str(video_path), detector, tracker, frame_stride=frame_stride)
 
     stem = video_path.stem
-    rows = []
-    for track in tracks:
+    windows = [
+        (track, window)
+        for track in tracks
         for window in windows_for_track(
             track,
             window_frames=window_frames,
             stride_frames=stride_frames,
             min_track_frames=min_track_frames,
-        ):
-            clip_path = output_dir / stem / f"track{window.track_id}_win{window.window_index}.mp4"
-            write_window_clip(
-                str(video_path), window, clip_path, crop_padding=crop_padding, output_size=output_size
-            )
-            rows.append(
-                {
-                    "source_video": str(video_path),
-                    "track_id": window.track_id,
-                    "window_index": window.window_index,
-                    "start_frame": window.frame_indices[0],
-                    "end_frame": window.frame_indices[-1],
-                    "num_frames": len(window.frame_indices),
-                    "clip_path": str(clip_path),
-                }
-            )
+        )
+    ]
+    logger.info(f"  {len(windows)} clip(s) to write from {len(tracks)} track(s)")
+
+    rows = []
+    last_log = time.monotonic()
+    for i, (track, window) in enumerate(windows, start=1):
+        clip_path = output_dir / stem / f"track{window.track_id}_win{window.window_index}.mp4"
+        write_window_clip(str(video_path), window, clip_path, crop_padding=crop_padding, output_size=output_size)
+        rows.append(
+            {
+                "source_video": str(video_path),
+                "track_id": window.track_id,
+                "window_index": window.window_index,
+                "start_frame": window.frame_indices[0],
+                "end_frame": window.frame_indices[-1],
+                "num_frames": len(window.frame_indices),
+                "clip_path": str(clip_path),
+            }
+        )
+        now = time.monotonic()
+        if now - last_log >= PROGRESS_LOG_INTERVAL_SECONDS or i == len(windows):
+            last_log = now
+            logger.info(f"  wrote {i}/{len(windows)} clip(s)")
     return rows
