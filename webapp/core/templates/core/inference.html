@@ -8,49 +8,60 @@
 {% else %}
 <form method="post" enctype="multipart/form-data" class="card">
   {% csrf_token %}
+  {% if form.non_field_errors %}<p class="error">{{ form.non_field_errors|join:" " }}</p>{% endif %}
   {% for field in form %}
     <div class="field">
       {{ field.label_tag }}
       {{ field }}
+      {% if field.help_text %}<div class="helptext">{{ field.help_text }}</div>{% endif %}
       {{ field.errors }}
     </div>
   {% endfor %}
+  {{ known_videos|json_script:"known-videos-data" }}
   <button type="submit">Predict</button>
 </form>
 
 {% if result %}
 <div class="card">
   <strong>Predictions</strong>
+  <div class="table-wrap">
   <table>
     <thead><tr><th>Label</th><th>Probability</th></tr></thead>
     <tbody>
       {% for label, prob in result %}
-      <tr><td>{{ label }}</td><td>{{ prob|floatformat:1 }}%</td></tr>
+      <tr{% if forloop.first %} class="fw-bold"{% endif %}><td>{{ label }}</td><td>{{ prob|floatformat:1 }}%</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endif %}
 
 {% if scene_result %}
-<div class="card">
-  <strong>Per-person timeline</strong> — one row per tracked person, per time window.
+<div class="card scene-card">
+  <strong>Per-person timeline</strong>
+  <p class="muted mt-1">One row per tracked person, per time window — grouped by person.</p>
+  <div class="table-wrap">
   <table>
     <thead><tr><th>Person</th><th>Frames</th><th>Label</th><th>Confidence</th></tr></thead>
     <tbody>
-      {% for window in scene_result %}
-      <tr>
-        <td>#{{ window.track_id }}</td>
-        <td>{{ window.start_frame }}&ndash;{{ window.end_frame }}</td>
-        <td>{{ window.label }}</td>
-        <td>{{ window.confidence|floatformat:1 }}</td>
-      </tr>
+      {% regroup scene_result by track_id as track_groups %}
+      {% for group in track_groups %}
+        {% for window in group.list %}
+        <tr{% if not forloop.first %} class="track-continuation"{% endif %}>
+          <td>{% if forloop.first %}<span class="badge">#{{ group.grouper }}</span>{% endif %}</td>
+          <td>{{ window.start_frame }}&ndash;{{ window.end_frame }}</td>
+          <td>{{ window.label }}</td>
+          <td>{{ window.confidence|floatformat:1 }}</td>
+        </tr>
+        {% endfor %}
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% elif scene_result is not None %}
-<p class="muted">No people were detected/tracked in this video.</p>
+<div class="empty-state">No people were detected/tracked in this video.</div>
 {% endif %}
 {% endif %}
 {% endblock %}

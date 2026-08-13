@@ -1,0 +1,86 @@
+{% extends "core/base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h1>Overview</h1>
+
+{% if running_extractions or running_trainings %}
+  <div class="card row-flex-sm">
+    {% if running_extractions %}
+      <a href="{% url 'core:extraction_list' %}" class="status-pill status-running">
+        {{ running_extractions }} extraction{{ running_extractions|pluralize }} running
+      </a>
+    {% endif %}
+    {% if running_trainings %}
+      <a href="{% url 'core:run_list' %}" class="status-pill status-running">
+        {{ running_trainings }} training run{{ running_trainings|pluralize }} running
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="card">
+  <h2 class="mt-0">Datasets</h2>
+  {% if datasets %}
+    <ul class="mt-0 mb-0">
+      {% for ds in datasets %}
+        <li class="mb-1">
+          <a href="{% url 'core:dataset_list' %}?dataset={{ ds.slug }}">{{ ds.name }}</a>
+          {% if not ds.video_dir_exists %}<span class="muted">— no videos uploaded yet</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <p class="muted mt-3 mb-0"><a href="{% url 'core:manage_datasets' %}">Manage datasets &rarr;</a></p>
+  {% else %}
+    <div class="empty-state">No datasets yet — <a href="{% url 'core:manage_datasets' %}">create one</a> to get started.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 class="mt-0">Recent extraction runs</h2>
+  {% if recent_extraction_runs %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Status</th><th>Started</th><th></th></tr></thead>
+      <tbody>
+        {% for run in recent_extraction_runs %}
+        <tr>
+          <td><a href="{% url 'core:extraction_detail' run.pk %}">{{ run.name }}</a></td>
+          <td><span class="status-pill status-{{ run.status }}">{{ run.get_status_display }}</span></td>
+          <td class="muted" title="{{ run.created_at }}">{{ run.created_at|timesince }} ago</td>
+          <td><a href="{% url 'core:extraction_detail' run.pk %}">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="muted mt-3 mb-0"><a href="{% url 'core:extraction_list' %}">All extraction runs &rarr;</a></p>
+  {% else %}
+    <div class="empty-state">No extraction runs yet — <a href="{% url 'core:start_extraction' %}">start one</a> from raw footage.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 class="mt-0">Recent training runs</h2>
+  {% if recent_training_runs %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Model</th><th>Status</th><th>Started</th><th></th></tr></thead>
+      <tbody>
+        {% for run in recent_training_runs %}
+        <tr>
+          <td><a href="{% url 'core:run_detail' run.pk %}">{{ run.name }}</a></td>
+          <td>{{ run.model_name }}</td>
+          <td><span class="status-pill status-{{ run.status }}">{{ run.get_status_display }}</span></td>
+          <td class="muted" title="{{ run.created_at }}">{{ run.created_at|timesince }} ago</td>
+          <td><a href="{% url 'core:run_detail' run.pk %}">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="muted mt-3 mb-0"><a href="{% url 'core:run_list' %}">All training runs &rarr;</a></p>
+  {% else %}
+    <div class="empty-state">No training runs yet — <a href="{% url 'core:start_training' %}">start one</a> once you have labeled clips.</div>
+  {% endif %}
+</div>
+{% endblock %}

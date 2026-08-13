@@ -30,20 +30,30 @@ import ctypes
 import os
 import shlex
 import subprocess
+import threading
 from pathlib import Path
 
 
-def launch_detached(argv: list[str], *, log_file: Path, exit_marker_prefix: str, cwd: Path) -> int:
+def launch_detached(
+    argv: list[str], *, log_file: Path, exit_marker_prefix: str, cwd: Path, append: bool = False
+) -> int:
     """Start argv as a detached background process.
 
-    Its combined stdout/stderr go to log_file (created/truncated fresh), and
-    once it exits a line `{exit_marker_prefix}{returncode}` is appended to
-    that same file. Returns the new process's pid.
+    Its combined stdout/stderr go to log_file (created/truncated fresh unless
+    `append=True`, e.g. resuming a run into its existing log), and once it
+    exits a line `{exit_marker_prefix}{returncode}` is appended to that same
+    file. Returns the new process's pid.
     """
+    # Create it up front (then close immediately -- the child re-opens it by
+    # path) so callers can rely on the file existing as soon as this returns,
+    # not just once the detached process gets around to writing to it.
+    open(log_file, "a" if append else "w").close()
+    redirect = ">>" if append else ">"
+
     if os.name == "nt":
         inner = subprocess.list2cmdline(argv)
         quoted_log = f'"{log_file}"'
-        command = f"{inner} >{quoted_log} 2>&1 & echo {exit_marker_prefix}!errorlevel!>>{quoted_log}"
+        command = f"{inner} {redirect}{quoted_log} 2>&1 & echo {exit_marker_prefix}!errorlevel!>>{quoted_log}"
         # Passed as a raw string, not a list: list2cmdline-style escaping of
         # the outer ["cmd", "/v:on", "/c", command] would double-escape the
         # quotes already inside `command`, and cmd's own /c parser doesn't
@@ -56,12 +66,23 @@ def launch_detached(argv: list[str], *, log_file: Path, exit_marker_prefix: str,
         )
     else:
         quoted_log = shlex.quote(str(log_file))
-        command = f"{shlex.join(argv)} > {quoted_log} 2>&1; echo {exit_marker_prefix}$? >> {quoted_log}"
+        command = f"{shlex.join(argv)} {redirect} {quoted_log} 2>&1; echo {exit_marker_prefix}$? >> {quoted_log}"
         proc = subprocess.Popen(
             ["bash", "-c", command],
             cwd=cwd,
             start_new_session=True,
         )
+        # We never otherwise wait()/poll() this Popen -- callers only learn
+        # about the run again via is_pid_alive(pid) or the exit-marker line,
+        # potentially from a different process entirely. Left unreaped, the
+        # wrapper becomes a zombie the moment it exits, and a zombie still
+        # answers os.kill(pid, 0) successfully (it's unreaped, not gone), so
+        # is_pid_alive would report it alive forever. Reap it in the
+        # background as soon as it exits so the pid actually frees up; this
+        # doesn't affect the child's detachment (start_new_session already
+        # means it survives this process exiting, at which point init
+        # reparents and reaps it instead).
+        threading.Thread(target=proc.wait, daemon=True).start()
     return proc.pid
 
 
