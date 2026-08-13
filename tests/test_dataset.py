@@ -7,7 +7,6 @@ from action_recognition.data.dataset import (
     datasets_from_manifest,
     read_clip_frames,
 )
-from conftest import write_synthetic_video
 
 
 def test_read_clip_frames_samples_requested_count(synthetic_video):
@@ -39,7 +38,7 @@ def test_span_to_frames_falls_back_to_whole_video_without_usable_fps():
     assert _span_to_frames(1.0, 3.0, fps=0, total=100) == (0, 100)
 
 
-def test_read_clip_frames_samples_only_within_the_given_span(tmp_path):
+def test_read_clip_frames_samples_only_within_the_given_span(write_synthetic_video, tmp_path):
     # 40 frames @ 10fps = 4s; each frame's pixel value is roughly i*10 % 255
     # (see conftest.write_synthetic_video) -- lossy mp4v encoding perturbs it
     # slightly, so allow some tolerance -- letting us check every sampled
@@ -66,7 +65,7 @@ def test_video_clip_dataset_returns_expected_shapes(synthetic_video):
     assert isinstance(clip, torch.Tensor)
 
 
-def test_video_clip_dataset_reads_span_rows(tmp_path):
+def test_video_clip_dataset_reads_span_rows(write_synthetic_video, tmp_path):
     video = write_synthetic_video(tmp_path / "long.mp4", num_frames=40)
     manifest = pd.DataFrame(
         {
