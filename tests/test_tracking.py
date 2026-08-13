@@ -1,6 +1,8 @@
 import pytest
+import torch
 
-from action_recognition.tracking.detectors import available_detectors
+from action_recognition.tracking.detectors import available_detectors, build_detector
+from action_recognition.tracking.detectors import torchvision_det
 from action_recognition.tracking.extract import windows_for_track
 from action_recognition.tracking.trackers import available_trackers, build_tracker
 from action_recognition.tracking.trackers.registry import register_tracker
@@ -13,6 +15,30 @@ def _box_at(x: float, y: float, size: float = 10.0) -> tuple[float, float, float
 
 def test_available_detectors_lists_builtin():
     assert "fasterrcnn" in available_detectors()
+
+
+def test_fasterrcnn_detector_honors_explicit_cpu_device():
+    detector = build_detector("fasterrcnn", pretrained=False, device="cpu")
+    assert detector.device == torch.device("cpu")
+
+
+def test_fasterrcnn_detector_resolves_device_when_unset(monkeypatch):
+    # Regression guard: this used to hardcode torch.device("cpu") regardless
+    # of what hardware was available -- confirm it now delegates to the
+    # shared resolve_device() (mocked here so the test doesn't need a real
+    # GPU to prove the wiring is in place).
+    captured = {}
+
+    def fake_resolve_device(requested):
+        captured["requested"] = requested
+        return torch.device("cpu")
+
+    monkeypatch.setattr(torchvision_det, "resolve_device", fake_resolve_device)
+
+    detector = build_detector("fasterrcnn", pretrained=False, device="cuda")
+
+    assert captured["requested"] == "cuda"
+    assert detector.device == torch.device("cpu")
 
 
 def test_available_trackers_lists_builtin():

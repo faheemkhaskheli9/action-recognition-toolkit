@@ -187,3 +187,9 @@ need a real broker + horizontally scalable GPU worker fleet in place of
 needs to run behind a load balancer with per-tenant quotas on training
 concurrency) — treat it as a deliberate, separately-scoped initiative to
 design and sequence explicitly, not a background refactor.
+
+## Attribution
+
+Do not mention "Claude" anywhere in code, code comments, or git (commit
+messages, branch names, PR titles/descriptions). Keep all committed
+artifacts free of AI-attribution references.

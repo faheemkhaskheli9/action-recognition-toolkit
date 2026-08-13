@@ -1,5 +1,6 @@
 import torch
 
+from action_recognition.inference import scene_predict
 from action_recognition.inference.predict import predict
 from action_recognition.models import build_model
 from action_recognition.utils.checkpoint import save_checkpoint
@@ -59,3 +60,28 @@ def test_predict_runs_on_explicit_cpu_device(synthetic_video, tmp_path):
 
     results = predict(checkpoint_path, synthetic_video, device="cpu", top_k=1)
     assert results[0][0] in label_map
+
+
+def test_predict_scene_passes_resolved_device_to_detector(synthetic_video, tmp_path, monkeypatch):
+    # Regression guard: the detector used to be built with no device at all
+    # (always CPU) even when the classifier model itself ran on a requested
+    # GPU -- confirm the two now agree.
+    label_map = {"jump": 0, "wave": 1}
+    checkpoint_path = _write_tiny_checkpoint(tmp_path / "best.pt", label_map)
+
+    captured = {}
+
+    class FakeDetector:
+        def detect(self, frame):
+            return []
+
+    def fake_build_detector(name, **params):
+        captured["params"] = params
+        return FakeDetector()
+
+    monkeypatch.setattr(scene_predict, "build_detector", fake_build_detector)
+
+    results = scene_predict.predict_scene(checkpoint_path, synthetic_video, device="cpu")
+
+    assert captured["params"]["device"] == "cpu"
+    assert results == []  # FakeDetector never finds anyone, so no tracks/windows either

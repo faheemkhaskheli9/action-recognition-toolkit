@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect, render
 
@@ -29,4 +30,5 @@ def start_training(request):
                 return redirect("core:run_detail", pk=run.pk)
     else:
         form = StartTrainingForm()
-    return render(request, "core/training_form.html", {"form": form})
+    known_manifest_paths = services.manifest.known_manifest_paths(settings.DATA_DIR)
+    return render(request, "core/training_form.html", {"form": form, "known_manifest_paths": known_manifest_paths})

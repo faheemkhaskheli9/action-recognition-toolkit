@@ -3,57 +3,110 @@
 {% block content %}
 <h1>Label your action recognition dataset</h1>
 <p class="muted">
-  No videos here yet? Upload some on the <a href="{% url 'core:dataset_list' %}?video_dir={{ video_dir|urlencode }}&manifest_path={{ manifest_path|urlencode }}">Dataset</a> page first.
+  No videos here yet? Upload some on the <a href="{% url 'core:dataset_list' %}?dataset={{ dataset.slug }}">Dataset</a> page first.
 </p>
 
-<div class="card">
-  <form method="get">
-    <div class="field">
-      <label>Video folder</label>
-      <input type="text" name="video_dir" value="{{ video_dir }}">
-    </div>
-    <div class="field">
-      <label>Manifest file</label>
-      <input type="text" name="manifest_path" value="{{ manifest_path }}">
-    </div>
-    <button type="submit">Use this folder</button>
-  </form>
-</div>
+{% include "core/_dataset_picker.html" %}
 
-{% if missing_dir %}
-  <p class="muted">Folder not found: {{ video_dir }}. Point it at a folder containing your video files.</p>
+{% if not dataset %}
+  <div class="empty-state">No datasets yet — <a href="{% url 'core:manage_datasets' %}">create one</a> to get started.</div>
+{% elif missing_dir %}
+  <div class="empty-state">Folder not found: {{ video_dir }}. Upload videos on the Dataset page first.</div>
 {% else %}
+  {% widthratio labeled_count total 100 as labeled_pct %}
   <p class="muted">{{ labeled_count }} / {{ total }} labeled</p>
+  <div class="progress-bar"><span style="width: {{ labeled_pct|default:0 }}%"></span></div>
 
   {% if current %}
     <div class="card">
       <h2>{{ current_name }}</h2>
-      <video controls src="{% url 'core:serve_video' %}?path={{ current|urlencode }}"></video>
+      <video id="label-video" controls src="{% url 'core:serve_video' %}?path={{ current|urlencode }}"></video>
 
-      <form method="post" action="{% url 'core:save_label' %}" style="margin-top:1rem;">
+      <form method="post" action="{% url 'core:save_label' %}" class="mt-4">
         {% csrf_token %}
         <input type="hidden" name="video_path" value="{{ current }}">
-        <input type="hidden" name="manifest_path" value="{{ manifest_path }}">
+        <input type="hidden" name="dataset" value="{{ dataset.slug }}">
         <div class="field">
           <label>Label</label>
-          <input type="text" name="label" list="known-labels" placeholder="Pick an existing label or type a new one" required>
+          <input type="text" name="label" list="known-labels" placeholder="Pick an existing label or type a new one" required autofocus>
           <datalist id="known-labels">
             {% for label in known_labels %}
               <option value="{{ label }}">
             {% endfor %}
           </datalist>
         </div>
-        <button type="submit">Save & next</button>
+        <button type="submit">Save &amp; next</button>
       </form>
 
-      <form method="post" action="{% url 'core:skip_video' %}" style="display:inline;">
+      <form method="post" action="{% url 'core:skip_video' %}" class="inline-form">
         {% csrf_token %}
         <input type="hidden" name="video_path" value="{{ current }}">
         <button type="submit" class="secondary">Skip for now</button>
       </form>
     </div>
+
+    <div class="card" data-span-picker data-span-video="label-video">
+      <h3 class="mt-0">Or label just part of this video</h3>
+      <p class="muted">
+        For a longer recording where the action only happens in part of it —
+        play/scrub the video above, mark a start and end, add a label, and
+        repeat for as many spans as this video has.
+      </p>
+
+      {% if current_spans %}
+        <ul class="span-list span-list-spaced">
+          {% for span in current_spans %}
+            <li>
+              {{ span.label }} ({{ span.start_display }}&ndash;{{ span.end_display }})
+              <form method="post" action="{% url 'core:delete_span' %}" class="inline-form">
+                {% csrf_token %}
+                <input type="hidden" name="video_path" value="{{ current }}">
+                <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+                <input type="hidden" name="start_time" value="{{ span.start_time }}">
+                <input type="hidden" name="end_time" value="{{ span.end_time }}">
+                <button type="submit" class="ghost">Remove</button>
+              </form>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <form method="post" action="{% url 'core:add_span' %}">
+        {% csrf_token %}
+        <input type="hidden" name="video_path" value="{{ current }}">
+        <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+        <div class="field-row">
+          <div class="field">
+            <label>Start (seconds)</label>
+            <div class="field-row-sm">
+              <input type="number" step="0.1" min="0" name="start_time" data-span-start required>
+              <button type="button" class="ghost" data-span-set-start>Set = current time</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>End (seconds)</label>
+            <div class="field-row-sm">
+              <input type="number" step="0.1" min="0" name="end_time" data-span-end required>
+              <button type="button" class="ghost" data-span-set-end>Set = current time</button>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Label</label>
+          <input type="text" name="label" list="known-labels" placeholder="Pick an existing label or type a new one" required>
+        </div>
+        <button type="submit">Add span</button>
+      </form>
+
+      {% if current_spans %}
+        <form method="post" action="{% url 'core:finish_video' %}" class="mt-3">
+          {% csrf_token %}
+          <button type="submit" class="secondary">Done with this video &mdash; next</button>
+        </form>
+      {% endif %}
+    </div>
   {% else %}
-    <p>Every video in this folder has a label. Switch to Review to edit, or point at a new folder.</p>
+    <div class="empty-state">Every video in this folder has a label. Switch to Review to edit, or upload more on the Dataset page.</div>
   {% endif %}
 {% endif %}
 {% endblock %}
