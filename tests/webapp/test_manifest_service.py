@@ -12,6 +12,7 @@ from core.services.manifest import (
     next_unlabeled,
     progress,
     save_label,
+    save_labels,
     set_label,
     spans_for,
 )
@@ -75,6 +76,30 @@ def test_save_label_appends_row_and_persists_to_disk(tmp_path):
     assert updated.iloc[0]["label"] == "jump"
     on_disk = pd.read_csv(manifest_path)
     assert on_disk.iloc[0]["video_path"] == str(video.resolve())
+
+
+def test_save_labels_appends_one_row_per_entry_in_a_single_write(tmp_path):
+    manifest_path = tmp_path / "manifest.csv"
+    manifest = pd.DataFrame(columns=["video_path", "label"])
+    a, b = tmp_path / "a.mp4", tmp_path / "b.mp4"
+    a.write_bytes(b"x")
+    b.write_bytes(b"x")
+
+    updated = save_labels(manifest_path, manifest, [(a, "jump"), (b, "jump")])
+
+    assert updated["label"].tolist() == ["jump", "jump"]
+    on_disk = pd.read_csv(manifest_path)
+    assert sorted(on_disk["video_path"]) == sorted([str(a.resolve()), str(b.resolve())])
+
+
+def test_save_labels_with_no_entries_is_a_no_op(tmp_path):
+    manifest_path = tmp_path / "manifest.csv"
+    manifest = pd.DataFrame({"video_path": ["/a.mp4"], "label": ["idle"]})
+
+    updated = save_labels(manifest_path, manifest, [])
+
+    assert len(updated) == 1
+    assert updated.iloc[0]["label"] == "idle"
 
 
 def test_progress_counts_labeled_out_of_total(tmp_path):

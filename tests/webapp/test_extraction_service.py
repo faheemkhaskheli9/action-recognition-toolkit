@@ -257,3 +257,120 @@ def test_results_groups_clips_by_video_then_track(tmp_path):
     # windows come back in order even though the index rows above didn't
     assert [c["window_index"] for c in video_a["tracks"][0]["clips"]] == [0, 1]
     assert video_a["tracks"][0]["clips"][0]["name"] == "track0_win0.mp4"
+
+
+# --------------------------------------------------------------------- #
+# provenance_for_dataset / group_clips
+# --------------------------------------------------------------------- #
+
+@pytest.mark.django_db
+def test_provenance_for_dataset_maps_imported_clips_back_to_their_track(settings, tmp_path):
+    settings.REPO_ROOT = tmp_path
+    (tmp_path / "data" / "raw").mkdir(parents=True)
+    dataset = Dataset.objects.create(
+        name="Restaurant", slug="restaurant", video_dir="data/raw", manifest_path="data/manifest.csv"
+    )
+    output_dir = tmp_path / "data" / "tracks" / "scene1"
+    _write_index(
+        output_dir,
+        [
+            {
+                "source_video": "data/raw_scenes/a.mp4", "track_id": 0, "window_index": 0,
+                "start_frame": 0, "end_frame": 15, "num_frames": 16,
+                "clip_path": str(output_dir / "a" / "track0_win0.mp4"),
+            },
+            {
+                "source_video": "data/raw_scenes/a.mp4", "track_id": 0, "window_index": 1,
+                "start_frame": 16, "end_frame": 31, "num_frames": 16,
+                "clip_path": str(output_dir / "a" / "track0_win1.mp4"),
+            },
+        ],
+    )
+    run = _make_run(name="scene1", dataset=dataset, output_dir=str(output_dir), status=TrackExtractionRun.Status.SUCCEEDED)
+    # Simulate import_clips's own naming/copy so provenance can find them.
+    imported = tmp_path / "data" / "raw" / "scene1__a__track0_win0.mp4"
+    imported.write_bytes(b"x")
+    (tmp_path / "data" / "raw" / "scene1__a__track0_win1.mp4").write_bytes(b"x")
+
+    provenance = extraction_service.provenance_for_dataset(dataset)
+
+    assert provenance[str(imported.resolve())] == {
+        "run_id": run.pk,
+        "run_name": "scene1",
+        "source_video": "a",
+        "track_id": 0,
+        "window_index": 0,
+    }
+    assert len(provenance) == 2
+
+
+@pytest.mark.django_db
+def test_provenance_for_dataset_skips_clips_that_were_never_imported(settings, tmp_path):
+    settings.REPO_ROOT = tmp_path
+    (tmp_path / "data" / "raw").mkdir(parents=True)
+    dataset = Dataset.objects.create(
+        name="Restaurant", slug="restaurant", video_dir="data/raw", manifest_path="data/manifest.csv"
+    )
+    output_dir = tmp_path / "data" / "tracks" / "scene1"
+    _write_index(
+        output_dir,
+        [
+            {
+                "source_video": "data/raw_scenes/a.mp4", "track_id": 0, "window_index": 0,
+                "start_frame": 0, "end_frame": 15, "num_frames": 16,
+                "clip_path": str(output_dir / "a" / "track0_win0.mp4"),
+            },
+        ],
+    )
+    _make_run(name="scene1", dataset=dataset, output_dir=str(output_dir), status=TrackExtractionRun.Status.SUCCEEDED)
+    # Never actually imported into dataset.video_dir.
+
+    assert extraction_service.provenance_for_dataset(dataset) == {}
+
+
+@pytest.mark.django_db
+def test_provenance_for_dataset_ignores_runs_whose_dataset_was_deleted(settings, tmp_path):
+    settings.REPO_ROOT = tmp_path
+    (tmp_path / "data" / "raw").mkdir(parents=True)
+    dataset = Dataset.objects.create(
+        name="Restaurant", slug="restaurant", video_dir="data/raw", manifest_path="data/manifest.csv"
+    )
+    output_dir = tmp_path / "data" / "tracks" / "scene1"
+    _write_index(
+        output_dir,
+        [
+            {
+                "source_video": "data/raw_scenes/a.mp4", "track_id": 0, "window_index": 0,
+                "start_frame": 0, "end_frame": 15, "num_frames": 16,
+                "clip_path": str(output_dir / "a" / "track0_win0.mp4"),
+            },
+        ],
+    )
+    run = _make_run(name="scene1", dataset=None, output_dir=str(output_dir), status=TrackExtractionRun.Status.SUCCEEDED)
+    assert run.dataset is None  # never had this dataset, or it was deleted (SET_NULL) -- same effect
+    (tmp_path / "data" / "raw" / "scene1__a__track0_win0.mp4").write_bytes(b"x")
+
+    assert extraction_service.provenance_for_dataset(dataset) == {}
+
+
+def test_group_clips_nests_by_run_and_source_video_then_track_and_window():
+    provenance = {
+        "/d/scene1__a__track0_win1.mp4": {"run_id": 1, "run_name": "scene1", "source_video": "a", "track_id": 0, "window_index": 1},
+        "/d/scene1__a__track0_win0.mp4": {"run_id": 1, "run_name": "scene1", "source_video": "a", "track_id": 0, "window_index": 0},
+        "/d/scene1__a__track1_win0.mp4": {"run_id": 1, "run_name": "scene1", "source_video": "a", "track_id": 1, "window_index": 0},
+        "/d/scene1__b__track0_win0.mp4": {"run_id": 1, "run_name": "scene1", "source_video": "b", "track_id": 0, "window_index": 0},
+    }
+
+    groups = extraction_service.group_clips(provenance)
+
+    assert [g["source_video"] for g in groups] == ["a", "b"]
+    group_a = groups[0]
+    assert group_a["track_count"] == 2
+    assert group_a["clip_count"] == 3
+    assert [t["track_id"] for t in group_a["tracks"]] == [0, 1]
+    # windows come back in order even though the input dict didn't
+    assert [c["window_index"] for c in group_a["tracks"][0]["clips"]] == [0, 1]
+
+
+def test_group_clips_of_an_empty_provenance_is_empty():
+    assert extraction_service.group_clips({}) == []

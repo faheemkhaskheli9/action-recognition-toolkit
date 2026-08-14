@@ -1,0 +1,92 @@
+{# Visual span editor for the current single video -- a draggable timeline
+   bar (app.js's [data-timeline] handler) that keeps the underlying
+   start_time/end_time number inputs in sync, so add_span's POST contract
+   is unchanged. `video_id` names the <video> element this bar tracks. #}
+<div class="card" data-span-picker data-span-video="{{ video_id }}">
+  <h3 class="mt-0">Or label just part of this video</h3>
+  <p class="muted">
+    For a longer recording where the action only happens in part of it —
+    drag on the timeline below (or scrub the video and press <kbd>I</kbd> /
+    <kbd>O</kbd> to mark the in/out point at the playhead), add a label, and
+    repeat for as many spans as this video has.
+  </p>
+
+  <div class="timeline" data-timeline>
+    <div class="timeline-track" data-timeline-track tabindex="0" aria-label="Video timeline — drag to mark a span">
+      <div class="timeline-playhead" data-timeline-playhead></div>
+      {% for span in current_spans %}
+        <div
+          class="timeline-span"
+          data-timeline-existing
+          data-start="{{ span.start_time }}"
+          data-end="{{ span.end_time }}"
+          title="{{ span.label }} ({{ span.start_display }}–{{ span.end_display }})"
+        >
+          <span class="timeline-span-label">{{ span.label }}</span>
+        </div>
+      {% endfor %}
+      <div class="timeline-range" data-timeline-range hidden>
+        <span class="timeline-handle" data-timeline-handle="start"></span>
+        <span class="timeline-handle" data-timeline-handle="end"></span>
+      </div>
+    </div>
+    <div class="timeline-toolbar">
+      <span class="muted timeline-readout" data-timeline-readout>No range marked yet — drag on the bar above</span>
+      <button type="button" class="ghost" data-timeline-preview disabled>Preview span</button>
+    </div>
+  </div>
+
+  {% if current_spans %}
+    <ul class="span-list span-list-spaced">
+      {% for span in current_spans %}
+        <li>
+          {{ span.label }} ({{ span.start_display }}&ndash;{{ span.end_display }})
+          <form method="post" action="{% url 'core:delete_span' %}" class="inline-form">
+            {% csrf_token %}
+            <input type="hidden" name="video_path" value="{{ current }}">
+            <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+            <input type="hidden" name="start_time" value="{{ span.start_time }}">
+            <input type="hidden" name="end_time" value="{{ span.end_time }}">
+            <button type="submit" class="ghost">Remove</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post" action="{% url 'core:add_span' %}">
+    {% csrf_token %}
+    <input type="hidden" name="video_path" value="{{ current }}">
+    <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+    <div class="field-row">
+      <div class="field">
+        <label>Start (seconds)</label>
+        <div class="field-row-sm">
+          <input type="number" step="0.1" min="0" name="start_time" data-span-start required>
+          <button type="button" class="ghost" data-span-set-start>Set = current time</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>End (seconds)</label>
+        <div class="field-row-sm">
+          <input type="number" step="0.1" min="0" name="end_time" data-span-end required>
+          <button type="button" class="ghost" data-span-set-end>Set = current time</button>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Label</label>
+      <input type="text" name="label" list="known-labels" placeholder="Pick an existing label or type a new one" required>
+      {% include "core/_label_chips.html" %}
+    </div>
+    <button type="submit">Add span</button>
+  </form>
+
+  {% if current_spans %}
+    <form method="post" action="{% url 'core:finish_video' %}" class="mt-3">
+      {% csrf_token %}
+      <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+      <button type="submit" class="secondary">Done with this video &mdash; next</button>
+    </form>
+  {% endif %}
+</div>
