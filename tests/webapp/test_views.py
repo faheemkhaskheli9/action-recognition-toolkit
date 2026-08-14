@@ -256,6 +256,20 @@ def test_delete_entry_with_a_span_removes_only_that_span(client, repo, dataset):
     assert manifest["label"].tolist() == ["idle"]
 
 
+def test_delete_entry_rejects_a_non_numeric_span_instead_of_500ing(client, repo, dataset):
+    video = repo / "data" / "raw" / "a.mp4"
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"x")
+
+    resp = client.post(
+        reverse("core:delete_entry"),
+        {"video_path": str(video.resolve()), "dataset": dataset.slug, "start_time": "not-a-number", "end_time": "3.0"},
+    )
+
+    assert resp.status_code == 302
+    assert resp.url == reverse("core:dataset_list") + f"?dataset={dataset.slug}"
+
+
 # --------------------------------------------------------------------- #
 # datasets.manage_datasets / delete_dataset
 # --------------------------------------------------------------------- #
@@ -290,6 +304,15 @@ def test_manage_datasets_post_rejects_a_blank_name(client, repo):
 
     assert resp.status_code == 200
     assert Dataset.objects.count() == 0
+
+
+def test_manage_datasets_post_rejects_a_colliding_name_instead_of_500ing(client, repo, dataset):
+    # dataset fixture already created "Default" -- posting the same name
+    # used to hit an unhandled IntegrityError straight from the DB.
+    resp = client.post(reverse("core:manage_datasets"), {"name": dataset.name})
+
+    assert resp.status_code == 200
+    assert Dataset.objects.filter(name=dataset.name).count() == 1
 
 
 def test_delete_dataset_removes_the_row_but_keeps_files_by_default(client, repo, dataset):
@@ -527,6 +550,31 @@ def test_extraction_detail_renders_the_per_video_track_breakdown(client, repo):
     assert b"Track 0" in resp.content
 
 
+def test_extraction_detail_import_copy_names_the_real_target_dataset(client, repo, dataset):
+    # Regression guard: the help text used to hardcode "data/raw" and link
+    # to Label/Dataset with no dataset slug, both stale since the Dataset
+    # model replaced the single fixed data/raw folder.
+    run = _extraction_run(repo, dataset=dataset, status=TrackExtractionRun.Status.SUCCEEDED)
+
+    resp = client.get(reverse("core:extraction_detail", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 200
+    assert resp.context["target_dataset"] == dataset
+    assert dataset.video_dir.encode() in resp.content
+    assert f"?dataset={dataset.slug}".encode() in resp.content
+    assert b"data/raw</code> so" not in resp.content
+
+
+def test_extraction_detail_import_copy_prompts_to_create_a_dataset_when_none_exist(client, repo):
+    run = _extraction_run(repo, status=TrackExtractionRun.Status.SUCCEEDED)  # no dataset, none to fall back to
+
+    resp = client.get(reverse("core:extraction_detail", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 200
+    assert resp.context["target_dataset"] is None
+    assert b"Create a dataset first" in resp.content
+
+
 # --------------------------------------------------------------------- #
 # labeling.label_videos
 # --------------------------------------------------------------------- #
@@ -615,11 +663,22 @@ def test_skip_video_hides_it_from_the_next_pick(client, repo, dataset):
     b.write_bytes(b"x")
 
     client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
-    skip_resp = client.post(reverse("core:skip_video"), {"video_path": str(a.resolve())})
+    skip_resp = client.post(
+        reverse("core:skip_video"), {"video_path": str(a.resolve()), "dataset": dataset.slug}
+    )
     assert skip_resp.status_code == 302
 
     resp = client.get(reverse("core:label_videos"))
     assert resp.context["current_name"] == "b.mp4"
+
+
+def test_skip_video_requires_a_dataset(client, repo, dataset):
+    # Regression guard: skip_video used to have no dataset context at all,
+    # so its session bookkeeping couldn't be scoped per dataset.
+    resp = client.post(reverse("core:skip_video"), {"video_path": "data/raw/a.mp4"})
+
+    assert resp.status_code == 302
+    assert resp.url == reverse("core:manage_datasets")
 
 
 # --------------------------------------------------------------------- #
@@ -699,11 +758,45 @@ def test_finish_video_advances_to_the_next_video(client, repo, dataset):
             "end_time": "3.0",
         },
     )
-    finish_resp = client.post(reverse("core:finish_video"))
+    finish_resp = client.post(reverse("core:finish_video"), {"dataset": dataset.slug})
     assert finish_resp.status_code == 302
 
     resp = client.get(reverse("core:label_videos"))
     assert resp.context["current_name"] == "b.mp4"
+
+
+def test_switching_datasets_mid_label_does_not_leak_the_old_datasets_current_video(client, repo, dataset):
+    # Regression guard: current_video/skipped used to be flat, unscoped
+    # session keys. Switching datasets via the picker without finishing the
+    # video left the old dataset's video "current" under the new dataset,
+    # so saving a label would write dataset A's video path into dataset B's
+    # manifest.
+    other = Dataset.objects.create(name="Other", slug="other", video_dir="data/other", manifest_path="data/other.csv")
+
+    a_dir = repo / "data" / "raw"
+    a_dir.mkdir(parents=True)
+    (a_dir / "a.mp4").write_bytes(b"x")
+    b_dir = repo / "data" / "other"
+    b_dir.mkdir(parents=True)
+    (b_dir / "b.mp4").write_bytes(b"x")
+
+    first = client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+    assert first.context["current_name"] == "a.mp4"
+
+    # Switch datasets without finishing/skipping -- same as clicking the
+    # dataset picker mid-label.
+    second = client.get(reverse("core:label_videos"), {"dataset": other.slug})
+    assert second.context["current_name"] == "b.mp4"  # not a.mp4 leaking from the old dataset
+
+    resp = client.post(
+        reverse("core:save_label"),
+        {"label": "jump", "video_path": second.context["current"], "dataset": other.slug},
+    )
+    assert resp.status_code == 302
+
+    other_manifest = pd.read_csv(repo / "data" / "other.csv")
+    assert other_manifest.iloc[0]["video_path"].endswith("b.mp4")
+    assert not (repo / "data" / "manifest.csv").exists()  # dataset A's manifest untouched
 
 
 def test_delete_span_removes_only_that_span(client, repo, dataset):

@@ -17,10 +17,14 @@ def manage_datasets(request):
         if not name:
             messages.error(request, "Dataset name can't be empty.")
         else:
-            dataset = services.datasets.create_dataset(name)
-            services.datasets.set_current(request, dataset)
-            messages.success(request, f"Created dataset {dataset.name!r}.")
-            return redirect("core:dataset_list")
+            try:
+                dataset = services.datasets.create_dataset(name)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                services.datasets.set_current(request, dataset)
+                messages.success(request, f"Created dataset {dataset.name!r}.")
+                return redirect("core:dataset_list")
 
     rows = []
     for dataset in Dataset.objects.all():

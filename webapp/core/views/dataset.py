@@ -26,11 +26,6 @@ def _safe_filename(name: str) -> str:
     return name or "video"
 
 
-def _dataset_from_post(request) -> Dataset | None:
-    slug = request.POST.get("dataset")
-    return Dataset.objects.filter(slug=slug).first() if slug else None
-
-
 def _redirect_to_dataset(dataset_slug: str):
     url = f"{reverse('core:dataset_list')}?dataset={dataset_slug}"
     return redirect(url)
@@ -79,7 +74,7 @@ def upload_videos(request):
     if request.method != "POST":
         return redirect("core:dataset_list")
 
-    dataset = _dataset_from_post(request)
+    dataset = services.datasets.resolve_from_post(request)
     if dataset is None:
         messages.error(request, "Create a dataset first.")
         return redirect("core:manage_datasets")
@@ -126,7 +121,7 @@ def update_label(request):
     if request.method != "POST":
         return redirect("core:dataset_list")
 
-    dataset = _dataset_from_post(request)
+    dataset = services.datasets.resolve_from_post(request)
     if dataset is None:
         messages.error(request, "Create a dataset first.")
         return redirect("core:manage_datasets")
@@ -154,7 +149,7 @@ def delete_entry(request):
     if request.method != "POST":
         return redirect("core:dataset_list")
 
-    dataset = _dataset_from_post(request)
+    dataset = services.datasets.resolve_from_post(request)
     if dataset is None:
         messages.error(request, "Create a dataset first.")
         return redirect("core:manage_datasets")
@@ -171,8 +166,12 @@ def delete_entry(request):
     # Absent when deleting the whole-video row (the default, from the inline
     # edit table); present when deleting one labeled span from the list
     # below it, so only that span's row is removed.
-    start_time = _optional_float(request, "start_time")
-    end_time = _optional_float(request, "end_time")
+    try:
+        start_time = _optional_float(request, "start_time")
+        end_time = _optional_float(request, "end_time")
+    except ValueError:
+        messages.error(request, "Start/end time must be numbers.")
+        return _redirect_to_dataset(dataset.slug)
 
     manifest = services.manifest.load_manifest(manifest_path)
     services.manifest.delete_entry(

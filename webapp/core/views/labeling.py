@@ -14,9 +14,14 @@ from ..models import Dataset
 from ..paths import is_within_repo, resolve_repo_path
 
 
-def _dataset_from_post(request) -> Dataset | None:
-    slug = request.POST.get("dataset")
-    return Dataset.objects.filter(slug=slug).first() if slug else None
+def _session_keys(dataset: Dataset) -> tuple[str, str]:
+    """Session keys for this dataset's sticky "current video" and "skipped
+    this session" state -- namespaced per dataset so switching datasets via
+    the picker mid-label can't leak one dataset's in-progress video into
+    another's (a flat, unscoped key used to let a save after switching
+    datasets write the old dataset's video into the new dataset's
+    manifest)."""
+    return f"current_video:{dataset.slug}", f"skipped:{dataset.slug}"
 
 
 def label_videos(request):
@@ -35,13 +40,14 @@ def label_videos(request):
         return render(request, "core/labeling.html", context)
 
     manifest = services.manifest.load_manifest(manifest_path)
-    skipped = set(request.session.get("skipped", []))
+    current_key, skipped_key = _session_keys(dataset)
+    skipped = set(request.session.get(skipped_key, []))
 
     # The current video is sticky across requests (rather than re-picked from
     # next_unlabeled() every time) so that adding a labeled span -- which
     # writes a manifest row for this video without being "done" with it --
     # doesn't cause the very next page load to jump to a different video.
-    current_str = request.session.get("current_video")
+    current_str = request.session.get(current_key)
     current = None
     if current_str:
         candidate = resolve_repo_path(current_str)
@@ -49,7 +55,7 @@ def label_videos(request):
             current = candidate
     if current is None:
         current = services.manifest.next_unlabeled(video_dir, manifest, skipped)
-        request.session["current_video"] = str(current) if current else None
+        request.session[current_key] = str(current) if current else None
 
     labeled_count, total = services.manifest.progress(video_dir, manifest)
 
@@ -70,7 +76,7 @@ def save_label(request):
     if request.method != "POST":
         return redirect("core:label_videos")
 
-    dataset = _dataset_from_post(request)
+    dataset = services.datasets.resolve_from_post(request)
     if dataset is None:
         messages.error(request, "Create a dataset first.")
         return redirect("core:manage_datasets")
@@ -84,7 +90,8 @@ def save_label(request):
     manifest_path = resolve_repo_path(dataset.manifest_path)
     manifest = services.manifest.load_manifest(manifest_path)
     services.manifest.save_label(manifest_path, manifest, video_path, label)
-    request.session.pop("current_video", None)
+    current_key, _ = _session_keys(dataset)
+    request.session.pop(current_key, None)
     return redirect("core:label_videos")
 
 
@@ -105,7 +112,7 @@ def add_span(request):
     if request.method != "POST":
         return redirect("core:label_videos")
 
-    dataset = _dataset_from_post(request)
+    dataset = services.datasets.resolve_from_post(request)
     if dataset is None:
         messages.error(request, "Create a dataset first.")
         return redirect("core:manage_datasets")
@@ -135,7 +142,7 @@ def delete_span(request):
     if request.method != "POST":
         return redirect("core:label_videos")
 
-    dataset = _dataset_from_post(request)
+    dataset = services.datasets.resolve_from_post(request)
     if dataset is None:
         messages.error(request, "Create a dataset first.")
         return redirect("core:manage_datasets")
@@ -154,16 +161,25 @@ def delete_span(request):
 
 def finish_video(request):
     if request.method == "POST":
-        request.session.pop("current_video", None)
+        dataset = services.datasets.resolve_from_post(request)
+        if dataset is not None:
+            current_key, _ = _session_keys(dataset)
+            request.session.pop(current_key, None)
     return redirect("core:label_videos")
 
 
 def skip_video(request):
     if request.method == "POST":
-        skipped = set(request.session.get("skipped", []))
+        dataset = services.datasets.resolve_from_post(request)
+        if dataset is None:
+            messages.error(request, "Create a dataset first.")
+            return redirect("core:manage_datasets")
+
+        current_key, skipped_key = _session_keys(dataset)
+        skipped = set(request.session.get(skipped_key, []))
         skipped.add(request.POST.get("video_path", ""))
-        request.session["skipped"] = list(skipped)
-        request.session.pop("current_video", None)
+        request.session[skipped_key] = list(skipped)
+        request.session.pop(current_key, None)
     return redirect("core:label_videos")
 
 

@@ -58,12 +58,17 @@ def extraction_list(request):
 def extraction_detail(request, pk):
     run = get_object_or_404(TrackExtractionRun, pk=pk)
     services.extraction.refresh_status(run)
+    # Same target `import_extraction_clips` actually copies into -- shown so
+    # the "Import clips" help text and its Label/Dataset links describe
+    # where clips really land, not the pre-Dataset-model fixed `data/raw`.
+    target_dataset = run.dataset or services.datasets.get_current(request)
     context = {
         "run": run,
         "log_tail": services.extraction.tail_log(run),
         "clip_count": services.extraction.clip_count(run),
         "progress": services.extraction.progress(run),
         "results": services.extraction.results(run),
+        "target_dataset": target_dataset,
     }
     return render(request, "core/extraction_detail.html", context)
 
