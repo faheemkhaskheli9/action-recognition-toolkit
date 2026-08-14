@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import shutil
 
+from django.db import IntegrityError, transaction
 from django.utils.text import slugify
 
 from ..models import Dataset
@@ -27,13 +28,26 @@ def _unique_slug(name: str) -> str:
 
 
 def create_dataset(name: str) -> Dataset:
+    """Raises ValueError (not IntegrityError) if `name` collides with an
+    existing dataset -- `Dataset.name` is unique, but _unique_slug() only
+    dedupes the slug, so a same-named dataset (or a concurrent double
+    submit of the create form) would otherwise hit the DB constraint
+    directly; callers can catch ValueError and show it as a form error."""
     slug = _unique_slug(name)
-    return Dataset.objects.create(
-        name=name,
-        slug=slug,
-        video_dir=f"data/datasets/{slug}/raw",
-        manifest_path=f"data/datasets/{slug}/manifest.csv",
-    )
+    try:
+        # A nested atomic() block so IntegrityError only rolls back this one
+        # insert (to a savepoint) instead of poisoning the caller's whole
+        # transaction -- without it, any query after the caught exception
+        # would raise TransactionManagementError instead of just working.
+        with transaction.atomic():
+            return Dataset.objects.create(
+                name=name,
+                slug=slug,
+                video_dir=f"data/datasets/{slug}/raw",
+                manifest_path=f"data/datasets/{slug}/manifest.csv",
+            )
+    except IntegrityError:
+        raise ValueError(f"A dataset named {name!r} already exists.") from None
 
 
 def get_current(request) -> Dataset | None:
@@ -68,6 +82,18 @@ def resolve(request) -> Dataset | None:
             set_current(request, dataset)
             return dataset
     return get_current(request)
+
+
+def resolve_from_post(request) -> Dataset | None:
+    """Strict POST-only dataset lookup for mutating views (save_label,
+    add_span, upload_videos, ...): the `dataset` field must name a real,
+    currently-existing Dataset. Unlike resolve()/get_current(), this never
+    falls back to the sticky session selection and never sets it either --
+    these views' hidden `dataset` field always echoes whatever dataset the
+    page was rendered for, so guessing would risk silently mutating the
+    wrong dataset's manifest if the session and the form ever disagreed."""
+    slug = request.POST.get("dataset")
+    return Dataset.objects.filter(slug=slug).first() if slug else None
 
 
 def delete_dataset(dataset: Dataset, delete_files: bool = False) -> None:

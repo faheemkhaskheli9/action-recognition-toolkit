@@ -181,6 +181,20 @@ def test_progress_counts_skipped_videos_on_resume(tmp_path):
     assert extraction_service.progress(run) == {"video": "a.mp4", "current": 1, "total": 3}
 
 
+@pytest.mark.django_db
+def test_progress_matches_the_real_logger_format_with_its_timestamp_prefix(tmp_path):
+    # Regression guard: get_logger() (action_recognition.utils.logging)
+    # prefixes every real line with "HH:MM:SS LEVEL logger.name: ", so a
+    # regex anchored to the start of the line would never match actual
+    # subprocess output -- only prefix-free fixtures like the ones above.
+    log_file = tmp_path / "extract.log"
+    log_file.write_text(
+        "14:23:01 INFO action_recognition.scripts.extract_tracks: Tracking data/raw_scenes/a.mp4 (1/3)\n"
+    )
+    run = _make_run(log_file=str(log_file))
+    assert extraction_service.progress(run) == {"video": "a.mp4", "current": 1, "total": 3}
+
+
 # --------------------------------------------------------------------- #
 # results
 # --------------------------------------------------------------------- #

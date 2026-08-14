@@ -68,6 +68,27 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   view already computed, embedded via Django's `json_script` filter — no
   new endpoints or view changes.
 
+### Fixed
+- Extraction runs' per-video progress bar (`extraction_detail`/
+  `extraction_list`) never rendered against a real run: the parsing regex
+  required `Tracking`/`Skipping` at the very start of the log line, but the
+  subprocess's actual log lines are prefixed with a timestamp/level/logger
+  name first.
+- Switching datasets mid-label (via the dataset picker, without finishing
+  or skipping the current video first) could save the previous dataset's
+  video into the newly-selected dataset's manifest — the Label page's
+  "current video"/"skipped" session state wasn't scoped per dataset.
+- `ar-predict` always ran on CPU regardless of an available GPU; it now
+  autodetects like training, scene inference, and the detector already did.
+- Creating a dataset whose name collided with an existing one (including a
+  double form submit) 500'd instead of showing a form error.
+- Deleting a dataset-page manifest row with a non-numeric span time 500'd
+  instead of showing a form error.
+- The extraction detail page's "Import clips" help text always said
+  `data/raw` and linked to Label/Dataset with no dataset selected, both
+  stale since the Dataset model replaced the single fixed `data/raw`
+  folder — it now names and links to the run's actual target dataset.
+
 ## [1.0.0] — 2026-08-09
 
 First tagged release. Hardens the app that already existed (label →

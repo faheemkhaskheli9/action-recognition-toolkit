@@ -41,6 +41,7 @@
       <form method="post" action="{% url 'core:skip_video' %}" class="inline-form">
         {% csrf_token %}
         <input type="hidden" name="video_path" value="{{ current }}">
+        <input type="hidden" name="dataset" value="{{ dataset.slug }}">
         <button type="submit" class="secondary">Skip for now</button>
       </form>
     </div>
@@ -101,6 +102,7 @@
       {% if current_spans %}
         <form method="post" action="{% url 'core:finish_video' %}" class="mt-3">
           {% csrf_token %}
+          <input type="hidden" name="dataset" value="{{ dataset.slug }}">
           <button type="submit" class="secondary">Done with this video &mdash; next</button>
         </form>
       {% endif %}

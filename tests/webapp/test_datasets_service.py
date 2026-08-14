@@ -32,6 +32,18 @@ def test_create_dataset_disambiguates_a_colliding_slug():
     assert second.slug == "restaurant-floor-2"
 
 
+def test_create_dataset_rejects_a_colliding_name_with_a_value_error():
+    # Regression guard: Dataset.name is unique, but _unique_slug() only
+    # dedupes the slug -- a same-named dataset (or a double form submit)
+    # used to hit django.db.IntegrityError straight from the view.
+    datasets_service.create_dataset("Restaurant")
+
+    with pytest.raises(ValueError, match="Restaurant"):
+        datasets_service.create_dataset("Restaurant")
+
+    assert Dataset.objects.filter(name="Restaurant").count() == 1
+
+
 # --------------------------------------------------------------------- #
 # get_current / set_current / resolve
 # --------------------------------------------------------------------- #

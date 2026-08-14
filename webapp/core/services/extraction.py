@@ -155,7 +155,7 @@ def tail_log(run: TrackExtractionRun, max_lines: int = 200) -> str:
     return "\n".join(lines[-max_lines:])
 
 
-_PROGRESS_RE = re.compile(r"^(?:Tracking|Skipping) (.+?) \((\d+)/(\d+)\)", re.MULTILINE)
+_PROGRESS_RE = re.compile(r"(?:Tracking|Skipping) (.+?) \((\d+)/(\d+)\)")
 
 
 def progress(run: TrackExtractionRun) -> dict | None:
@@ -163,6 +163,12 @@ def progress(run: TrackExtractionRun) -> dict | None:
     (i/N)` / `Skipping <video> (i/N)` lines extract_tracks.py logs for every
     source video. Returns None before the first such line is logged (e.g.
     the detector is still loading) or once there's no log to read.
+
+    Not anchored to the start of the line: the real subprocess log has
+    `action_recognition.utils.logging.get_logger`'s `"%(asctime)s
+    %(levelname)s %(name)s: "` prefix before each message, so a `^` anchor
+    (or requiring re.MULTILINE) would never match real output -- only the
+    prefix-free fixtures a naive test would write by hand.
     """
     log_path = Path(run.log_file)
     if not log_path.exists():
