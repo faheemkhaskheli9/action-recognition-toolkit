@@ -79,6 +79,17 @@ def save_label(
     return updated
 
 
+def save_labels(manifest_path: Path, manifest: pd.DataFrame, entries: list[tuple[Path, str]]) -> pd.DataFrame:
+    """Append several whole-file labeled rows in a single write -- used by
+    track-level labeling (label_track view), where one label applies to
+    every window clip of a track. Equivalent to calling save_label() once
+    per entry, but writes the manifest once instead of once per clip."""
+    rows = [{"video_path": str(video_path.resolve()), "label": label} for video_path, label in entries]
+    updated = pd.concat([manifest, pd.DataFrame(rows)], ignore_index=True) if rows else manifest
+    write_manifest(updated, manifest_path)
+    return updated
+
+
 def set_label(manifest_path: Path, manifest: pd.DataFrame, video_path: Path, label: str) -> pd.DataFrame:
     """Upsert the whole-video label for `video_path` — updates that row if
     it's already in the manifest, otherwise appends one. Used by the dataset

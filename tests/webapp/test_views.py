@@ -616,6 +616,148 @@ def test_label_videos_ignores_an_unknown_dataset_slug(client, repo, dataset):
 
 
 # --------------------------------------------------------------------- #
+# labeling.label_videos / label_track / skip_group -- multi-person groups
+# --------------------------------------------------------------------- #
+
+def _write_tracks_index(output_dir, rows):
+    import csv
+
+    from action_recognition.scripts.extract_tracks import INDEX_FIELDS
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with open(output_dir / "tracks_index.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=INDEX_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _set_up_imported_track_group(repo, dataset, *, run_name="scene1", track_id=0, windows=2):
+    """A SUCCEEDED extraction run whose clips are already imported into
+    `dataset`'s video_dir under the same naming import_clips uses -- the
+    state provenance_for_dataset/group_clips need to recognize a group."""
+    output_dir = repo / "data" / "tracks" / run_name
+    rows = [
+        {
+            "source_video": "data/raw_scenes/a.mp4", "track_id": track_id, "window_index": i,
+            "start_frame": i * 16, "end_frame": i * 16 + 15, "num_frames": 16,
+            "clip_path": str(output_dir / "a" / f"track{track_id}_win{i}.mp4"),
+        }
+        for i in range(windows)
+    ]
+    _write_tracks_index(output_dir, rows)
+    run = TrackExtractionRun.objects.create(
+        name=run_name, config_path="", video_dir="data/raw_scenes", dataset=dataset,
+        output_dir=str(output_dir), log_file=str(output_dir / "extract.log"),
+        status=TrackExtractionRun.Status.SUCCEEDED,
+    )
+    video_dir = repo / dataset.video_dir
+    video_dir.mkdir(parents=True, exist_ok=True)
+    clips = []
+    for i in range(windows):
+        clip = video_dir / f"{run_name}__a__track{track_id}_win{i}.mp4"
+        clip.write_bytes(b"x")
+        clips.append(clip)
+    return run, clips
+
+
+def test_label_videos_groups_a_multi_person_import_by_source_video(client, repo, dataset):
+    _set_up_imported_track_group(repo, dataset)
+
+    resp = client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+
+    assert resp.status_code == 200
+    assert resp.context["current_unit"]["kind"] == "group"
+    group = resp.context["current_group"]
+    assert group["source_video"] == "a"
+    assert group["track_count"] == 1
+    assert group["clip_count"] == 2
+    assert b"Track 0" in resp.content
+
+
+def test_label_videos_prefers_a_plain_unlabeled_video_over_a_group(client, repo, dataset):
+    _set_up_imported_track_group(repo, dataset)
+    (repo / dataset.video_dir / "z.mp4").write_bytes(b"x")
+
+    resp = client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+
+    assert resp.context["current_unit"] == {"kind": "video", "path": resp.context["current"]}
+    assert resp.context["current_name"] == "z.mp4"
+
+
+def test_label_track_labels_every_window_clip_in_one_write(client, repo, dataset):
+    run, clips = _set_up_imported_track_group(repo, dataset)
+
+    resp = client.post(
+        reverse("core:label_track"),
+        {"dataset": dataset.slug, "run_id": run.pk, "source_video": "a", "track_id": "0", "label": "carrying"},
+    )
+
+    assert resp.status_code == 302
+    manifest = pd.read_csv(repo / "data" / "manifest.csv")
+    assert len(manifest) == 2
+    assert set(manifest["label"]) == {"carrying"}
+    assert sorted(manifest["video_path"]) == sorted(str(c.resolve()) for c in clips)
+
+
+def test_label_track_requires_a_label(client, repo, dataset):
+    run, _ = _set_up_imported_track_group(repo, dataset)
+
+    resp = client.post(
+        reverse("core:label_track"),
+        {"dataset": dataset.slug, "run_id": run.pk, "source_video": "a", "track_id": "0", "label": ""},
+    )
+
+    assert resp.status_code == 302
+    assert not (repo / "data" / "manifest.csv").exists()
+
+
+def test_save_label_with_keep_current_stays_on_the_same_group(client, repo, dataset):
+    # The group template's "label windows separately" fallback passes
+    # keep_current=1 to plain save_label -- labeling one window shouldn't
+    # advance away from a group that still has unlabeled clips.
+    run, clips = _set_up_imported_track_group(repo, dataset, windows=2)
+    first = client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+    assert first.context["current_unit"]["kind"] == "group"
+
+    resp = client.post(
+        reverse("core:save_label"),
+        {"video_path": str(clips[0]), "dataset": dataset.slug, "label": "carrying", "keep_current": "1"},
+    )
+    assert resp.status_code == 302
+
+    second = client.get(reverse("core:label_videos"))
+    assert second.context["current_unit"]["kind"] == "group"  # still on the same group, not advanced
+    assert second.context["current_unit"] == first.context["current_unit"]
+
+
+def test_group_moves_out_of_the_way_once_every_track_is_labeled(client, repo, dataset):
+    run, _ = _set_up_imported_track_group(repo, dataset)
+    client.get(reverse("core:label_videos"), {"dataset": dataset.slug})  # makes the group "current"
+
+    client.post(
+        reverse("core:label_track"),
+        {"dataset": dataset.slug, "run_id": run.pk, "source_video": "a", "track_id": "0", "label": "carrying"},
+    )
+
+    resp = client.get(reverse("core:label_videos"))
+    assert resp.context["current_unit"] is None  # nothing else left to label
+
+
+def test_skip_group_hides_it_and_falls_back_to_the_empty_state(client, repo, dataset):
+    run, _ = _set_up_imported_track_group(repo, dataset)
+    client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+
+    resp = client.post(
+        reverse("core:skip_group"),
+        {"dataset": dataset.slug, "run_id": run.pk, "source_video": "a"},
+    )
+
+    assert resp.status_code == 302
+    resp = client.get(reverse("core:label_videos"))
+    assert resp.context["current_unit"] is None
+
+
+# --------------------------------------------------------------------- #
 # labeling.save_label / skip_video
 # --------------------------------------------------------------------- #
 

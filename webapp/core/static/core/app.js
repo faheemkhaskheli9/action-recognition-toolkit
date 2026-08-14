@@ -383,9 +383,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // "Set = current time" buttons on the Label page's span editor — reads
-  // currentTime off the video named by data-span-video and drops it into
-  // the matching start/end number input, rounded to one decimal.
+  // Label page span editor: "Set = current time" buttons read currentTime
+  // off the video named by data-span-video into the matching start/end
+  // number input (rounded to one decimal) -- those inputs stay the source
+  // of truth add_span actually submits. The visual timeline bar below is a
+  // drag-to-mark front end that keeps them in sync; it degrades to the
+  // plain number inputs if the bar's elements aren't present for some
+  // reason (markup mismatch, JS error) since it's layered on afterward.
   const spanPicker = document.querySelector("[data-span-picker]");
   if (spanPicker) {
     const video = document.getElementById(spanPicker.getAttribute("data-span-video"));
@@ -393,15 +397,223 @@ document.addEventListener("DOMContentLoaded", () => {
     const endInput = spanPicker.querySelector("[data-span-end]");
     const setStartBtn = spanPicker.querySelector("[data-span-set-start]");
     const setEndBtn = spanPicker.querySelector("[data-span-set-end]");
+    const track = spanPicker.querySelector("[data-timeline-track]");
+    const playhead = spanPicker.querySelector("[data-timeline-playhead]");
+    const range = spanPicker.querySelector("[data-timeline-range]");
+    const readout = spanPicker.querySelector("[data-timeline-readout]");
+    const previewBtn = spanPicker.querySelector("[data-timeline-preview]");
+    const startHandle = range && range.querySelector('[data-timeline-handle="start"]');
+    const endHandle = range && range.querySelector('[data-timeline-handle="end"]');
+
+    const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+    function syncRangeFromInputs() {
+      if (!range) return;
+      const duration = video && video.duration && isFinite(video.duration) ? video.duration : 0;
+      const start = parseFloat(startInput.value);
+      const end = parseFloat(endInput.value);
+      if (!duration || isNaN(start) || isNaN(end)) {
+        range.hidden = true;
+        if (previewBtn) previewBtn.disabled = true;
+        return;
+      }
+      const pct = (s) => Math.min(100, Math.max(0, (s / duration) * 100));
+      range.hidden = false;
+      range.style.left = pct(start) + "%";
+      range.style.width = Math.max(0.5, pct(end) - pct(start)) + "%";
+      if (readout) readout.textContent = `${fmtTime(start)} – ${fmtTime(end)}`;
+      if (previewBtn) previewBtn.disabled = false;
+    }
+
     if (video && startInput && setStartBtn) {
       setStartBtn.addEventListener("click", () => {
         startInput.value = video.currentTime.toFixed(1);
+        syncRangeFromInputs();
       });
     }
     if (video && endInput && setEndBtn) {
       setEndBtn.addEventListener("click", () => {
         endInput.value = video.currentTime.toFixed(1);
+        syncRangeFromInputs();
       });
     }
+
+    // Drag-to-mark timeline bar -- only wired up if every element the
+    // markup should provide (_label_timeline.html) is actually present.
+    if (video && track && range && startInput && endInput) {
+      function duration() {
+        return video.duration && isFinite(video.duration) ? video.duration : 0;
+      }
+      function pctFor(seconds) {
+        const d = duration();
+        return d ? Math.min(100, Math.max(0, (seconds / d) * 100)) : 0;
+      }
+      function layoutExisting() {
+        if (!duration()) return;
+        track.querySelectorAll("[data-timeline-existing]").forEach((el) => {
+          const start = parseFloat(el.getAttribute("data-start"));
+          const end = parseFloat(el.getAttribute("data-end"));
+          el.style.left = pctFor(start) + "%";
+          el.style.width = Math.max(0.5, pctFor(end) - pctFor(start)) + "%";
+        });
+      }
+      function applyRange(startSeconds, endSeconds) {
+        const d = duration();
+        if (!d) return;
+        const lo = Math.max(0, Math.min(startSeconds, endSeconds));
+        const hi = Math.min(d, Math.max(startSeconds, endSeconds));
+        startInput.value = lo.toFixed(1);
+        endInput.value = Math.max(hi, lo + 0.1).toFixed(1);
+        syncRangeFromInputs();
+      }
+      function xToSeconds(clientX) {
+        const rect = track.getBoundingClientRect();
+        const frac = rect.width ? Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) : 0;
+        return frac * duration();
+      }
+
+      let dragMode = null; // "create" | "start" | "end"
+      let dragOrigin = 0;
+      function onPointerMove(e) {
+        if (!dragMode) return;
+        const seconds = xToSeconds(e.clientX);
+        if (dragMode === "create") applyRange(dragOrigin, seconds);
+        else if (dragMode === "start") applyRange(seconds, parseFloat(endInput.value));
+        else if (dragMode === "end") applyRange(parseFloat(startInput.value), seconds);
+      }
+      function onPointerUp() {
+        dragMode = null;
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+      }
+      function startDrag(mode, originSeconds) {
+        dragMode = mode;
+        dragOrigin = originSeconds;
+        document.addEventListener("pointermove", onPointerMove);
+        document.addEventListener("pointerup", onPointerUp);
+      }
+
+      track.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("[data-timeline-handle]") || e.target.closest("[data-timeline-existing]")) return;
+        const seconds = xToSeconds(e.clientX);
+        startDrag("create", seconds);
+        applyRange(seconds, seconds);
+      });
+      if (startHandle) {
+        startHandle.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          startDrag("start", 0);
+        });
+      }
+      if (endHandle) {
+        endHandle.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          startDrag("end", 0);
+        });
+      }
+      track.querySelectorAll("[data-timeline-existing]").forEach((el) => {
+        el.addEventListener("click", () => {
+          const start = parseFloat(el.getAttribute("data-start"));
+          if (!isNaN(start)) video.currentTime = start;
+        });
+      });
+
+      if (previewBtn) {
+        previewBtn.addEventListener("click", () => {
+          const start = parseFloat(startInput.value);
+          const end = parseFloat(endInput.value);
+          if (isNaN(start) || isNaN(end)) return;
+          video.currentTime = start;
+          video.play();
+          const stopAtEnd = () => {
+            if (video.currentTime >= end) {
+              video.pause();
+              video.removeEventListener("timeupdate", stopAtEnd);
+            }
+          };
+          video.addEventListener("timeupdate", stopAtEnd);
+        });
+      }
+
+      startInput.addEventListener("input", syncRangeFromInputs);
+      endInput.addEventListener("input", syncRangeFromInputs);
+      video.addEventListener("loadedmetadata", () => {
+        layoutExisting();
+        syncRangeFromInputs();
+      });
+      video.addEventListener("timeupdate", () => {
+        if (playhead) playhead.style.left = pctFor(video.currentTime) + "%";
+      });
+      if (video.readyState >= 1) {
+        layoutExisting();
+        syncRangeFromInputs();
+      }
+    }
+  }
+
+  // Quick-pick label chips (Label page and track-group rows): click fills
+  // the nearest label input in the same form.
+  document.querySelectorAll("[data-label-chip]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const form = chip.closest("form");
+      const input = form && form.querySelector('input[name="label"]');
+      if (!input) return;
+      input.value = chip.getAttribute("data-label-value") || "";
+      input.focus();
+    });
+  });
+
+  // Label page keyboard shortcuts -- only active while focus isn't inside a
+  // text input, so they never fight ordinary typing. Digit 1-9 quick-picks
+  // (and submits) a label on the page's one unambiguous "primary" form (the
+  // plain whole-video form, marked data-primary-label-form); a track group
+  // has several label forms on screen at once, so digits are scoped out
+  // there on purpose -- chip clicks still work everywhere.
+  const labelPage = document.querySelector("[data-label-page]");
+  if (labelPage) {
+    const isTyping = (el) => !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+
+    document.addEventListener("keydown", (e) => {
+      if (isTyping(document.activeElement) || e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key >= "1" && e.key <= "9") {
+        const primaryForm = document.querySelector("[data-primary-label-form]");
+        const chip = primaryForm && primaryForm.querySelector(`[data-chip-key="${e.key}"]`);
+        if (!chip) return;
+        e.preventDefault();
+        const input = primaryForm.querySelector('input[name="label"]');
+        if (input) input.value = chip.getAttribute("data-label-value") || "";
+        if (primaryForm.requestSubmit) primaryForm.requestSubmit();
+        else primaryForm.submit();
+        return;
+      }
+
+      const video = document.getElementById("label-video");
+      if (!video) return;
+
+      if (e.key === " ") {
+        e.preventDefault();
+        if (video.paused) video.play();
+        else video.pause();
+      } else if (e.key === "i" || e.key === "I") {
+        const startInput = document.querySelector("[data-span-start]");
+        if (startInput) {
+          startInput.value = video.currentTime.toFixed(1);
+          startInput.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      } else if (e.key === "o" || e.key === "O") {
+        const endInput = document.querySelector("[data-span-end]");
+        if (endInput) {
+          endInput.value = video.currentTime.toFixed(1);
+          endInput.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 1);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        video.currentTime = Math.max(0, video.currentTime - 1);
+      }
+    });
   }
 });
