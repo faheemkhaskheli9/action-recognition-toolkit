@@ -9,6 +9,7 @@ from action_recognition.data.dataset import read_clip_frames
 from action_recognition.data.transforms import build_transform
 from action_recognition.models import build_model
 from action_recognition.utils.checkpoint import load_checkpoint
+from action_recognition.utils.device import resolve_device
 
 
 def predict(checkpoint_path: Path, video_path: Path, device: str | None = None, top_k: int = 3):
@@ -17,7 +18,7 @@ def predict(checkpoint_path: Path, video_path: Path, device: str | None = None, 
     label_map = checkpoint["label_map"]
     idx_to_label = {idx: label for label, idx in label_map.items()}
 
-    resolved_device = torch.device(device) if device else torch.device("cpu")
+    resolved_device = resolve_device(device)
     model = build_model(config["model"]["name"], num_classes=len(label_map), **config["model"]["params"])
     model.load_state_dict(checkpoint["model_state"])
     model.to(resolved_device).eval()
