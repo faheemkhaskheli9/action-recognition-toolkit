@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.1.0] — 2026-08-14
 
 ### Added
 - Datasets: the webapp now has a first-class `Dataset` (its own video folder
@@ -38,6 +38,19 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   index is rewritten after every source video finishes, results appear
   progressively for a still-running run too — reload the page to pick up
   newly finished videos.
+- Label page redesign: the start/end span fields are now backed by a visual
+  drag-to-mark timeline (existing spans shown as blocks, a playhead, span
+  preview playback) instead of plain number inputs — the numbers stay as
+  the underlying fields the `add_span` POST contract already expected.
+  Clips from a multi-person Extract-tracks import are matched back to their
+  source video/track (via `tracks_index.csv`, nothing new persisted) and
+  shown grouped by tracked person instead of as unrelated videos; labeling
+  a track applies one label to every window clip in it, with a per-window
+  fallback for a track whose action changes partway through. Labeling is
+  also keyboard-driven now: quick-pick label chips plus digit keys 1-9 on
+  the primary single-video form, space to play/pause, I/O to mark the span
+  in/out point, and arrow keys to nudge the playhead — all scoped to not
+  fire while typing in a text field.
 
 ### Changed
 - `services.manifest.known_videos` takes an optional `repo_root` for
@@ -67,6 +80,27 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   same `known_videos`/`known_video_dirs`/`known_manifest_paths` data the
   view already computed, embedded via Django's `json_script` filter — no
   new endpoints or view changes.
+
+### Fixed
+- Extraction runs' per-video progress bar (`extraction_detail`/
+  `extraction_list`) never rendered against a real run: the parsing regex
+  required `Tracking`/`Skipping` at the very start of the log line, but the
+  subprocess's actual log lines are prefixed with a timestamp/level/logger
+  name first.
+- Switching datasets mid-label (via the dataset picker, without finishing
+  or skipping the current video first) could save the previous dataset's
+  video into the newly-selected dataset's manifest — the Label page's
+  "current video"/"skipped" session state wasn't scoped per dataset.
+- `ar-predict` always ran on CPU regardless of an available GPU; it now
+  autodetects like training, scene inference, and the detector already did.
+- Creating a dataset whose name collided with an existing one (including a
+  double form submit) 500'd instead of showing a form error.
+- Deleting a dataset-page manifest row with a non-numeric span time 500'd
+  instead of showing a form error.
+- The extraction detail page's "Import clips" help text always said
+  `data/raw` and linked to Label/Dataset with no dataset selected, both
+  stale since the Dataset model replaced the single fixed `data/raw`
+  folder — it now names and links to the run's actual target dataset.
 
 ## [1.0.0] — 2026-08-09
 

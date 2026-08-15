@@ -17,6 +17,7 @@ from django.utils import timezone
 from action_recognition.data.manifest import discover_videos
 
 from ..models import Dataset, TrackExtractionRun
+from ..paths import resolve_repo_path
 from . import _background
 
 EXIT_MARKER_PREFIX = "EXTRACTION_EXIT_CODE="
@@ -155,7 +156,7 @@ def tail_log(run: TrackExtractionRun, max_lines: int = 200) -> str:
     return "\n".join(lines[-max_lines:])
 
 
-_PROGRESS_RE = re.compile(r"^(?:Tracking|Skipping) (.+?) \((\d+)/(\d+)\)", re.MULTILINE)
+_PROGRESS_RE = re.compile(r"(?:Tracking|Skipping) (.+?) \((\d+)/(\d+)\)")
 
 
 def progress(run: TrackExtractionRun) -> dict | None:
@@ -163,6 +164,12 @@ def progress(run: TrackExtractionRun) -> dict | None:
     (i/N)` / `Skipping <video> (i/N)` lines extract_tracks.py logs for every
     source video. Returns None before the first such line is logged (e.g.
     the detector is still loading) or once there's no log to read.
+
+    Not anchored to the start of the line: the real subprocess log has
+    `action_recognition.utils.logging.get_logger`'s `"%(asctime)s
+    %(levelname)s %(name)s: "` prefix before each message, so a `^` anchor
+    (or requiring re.MULTILINE) would never match real output -- only the
+    prefix-free fixtures a naive test would write by hand.
     """
     log_path = Path(run.log_file)
     if not log_path.exists():
@@ -239,16 +246,25 @@ def results(run: TrackExtractionRun) -> list[dict]:
     return out
 
 
+def _dest_clip_name(run: TrackExtractionRun, rel: Path) -> str:
+    """The filename a clip lands under once imported into a dataset --
+    output_dir/<video_stem>/trackN_winM.mp4 (rel) flattens to
+    <run.name>__<video_stem>__trackN_winM.mp4, prefixed with the run name
+    since two runs can share a video_stem. Shared by import_clips (which
+    performs the copy) and provenance_for_dataset (which needs the same
+    name to recognize an already-imported clip and trace it back to its
+    source video/track/window) so the naming rule only lives in one place.
+    """
+    return f"{run.name}__{rel.parent.name}__{rel.name}"
+
+
 def import_clips(run: TrackExtractionRun, dest_dir: Path) -> int:
     """Copy every clip this run produced into dest_dir -- a dataset's own
     video_dir (usually run.dataset's, see views.extraction) -- so the
     Label/Dataset pages, which read/write that dataset's folder, can reach
-    multi-person clips without a manual filesystem move. Flattens
-    output_dir/<video_stem>/trackN_winM.mp4 into a unique
-    dest_dir/<run.name>__<video_stem>__trackN_winM.mp4 (prefixed with the run
-    name since two runs can share a video_stem). Already-imported clips
-    (same destination name and size) are skipped, so re-clicking after a run
-    adds more clips only copies what's new. Returns the number copied.
+    multi-person clips without a manual filesystem move. Already-imported
+    clips (same destination name and size) are skipped, so re-clicking after
+    a run adds more clips only copies what's new. Returns the number copied.
     """
     output_dir = Path(run.output_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -256,9 +272,82 @@ def import_clips(run: TrackExtractionRun, dest_dir: Path) -> int:
     imported = 0
     for clip in discover_videos(output_dir):
         rel = clip.relative_to(output_dir)
-        dest = dest_dir / f"{run.name}__{rel.parent.name}__{rel.name}"
+        dest = dest_dir / _dest_clip_name(run, rel)
         if dest.exists() and dest.stat().st_size == clip.stat().st_size:
             continue
         shutil.copy2(clip, dest)
         imported += 1
     return imported
+
+
+def provenance_for_dataset(dataset: Dataset) -> dict[str, dict]:
+    """Maps every clip in `dataset` that was imported from a track
+    extraction run back to its source video/track/window, so the Label page
+    can group multi-person clips instead of showing them as unrelated
+    videos. Derived entirely from each run's tracks_index.csv plus the same
+    naming rule import_clips used (_dest_clip_name) -- nothing extra is
+    persisted. A run whose `dataset` FK has gone null (the dataset it
+    imported into was deleted) is skipped, so its clips -- if they still
+    exist under some other dataset's video_dir -- fall back to being labeled
+    as plain ungrouped videos rather than pointing at a stale run.
+    """
+    dest_dir = resolve_repo_path(dataset.video_dir)
+    provenance: dict[str, dict] = {}
+    for run in TrackExtractionRun.objects.filter(dataset=dataset, status=TrackExtractionRun.Status.SUCCEEDED):
+        index_path = Path(run.output_dir) / "tracks_index.csv"
+        if not index_path.exists():
+            continue
+        with open(index_path, newline="") as f:
+            rows = list(csv.DictReader(f))
+        for row in rows:
+            # clip_path in the index is the extractor's own absolute path
+            # (output_dir/<stem>/trackN_winM.mp4) -- only its last two
+            # components (stem folder, filename) feed _dest_clip_name, so
+            # rebuild just those rather than assuming clip_path's shape.
+            clip_path = Path(row["clip_path"])
+            rel = Path(clip_path.parent.name) / clip_path.name
+            dest = dest_dir / _dest_clip_name(run, rel)
+            if not dest.exists():
+                continue
+            provenance[str(dest.resolve())] = {
+                "run_id": run.pk,
+                "run_name": run.name,
+                "source_video": Path(row["source_video"]).stem,
+                "track_id": int(row["track_id"]),
+                "window_index": int(row["window_index"]),
+            }
+    return provenance
+
+
+def group_clips(provenance: dict[str, dict]) -> list[dict]:
+    """Nest provenance_for_dataset()'s flat per-clip map into one entry per
+    (run, source video), each with its tracks (one per tracked person) and
+    each track's window clips in window order -- the shape the Label page's
+    grouped view renders, and that label_track uses to resolve one track's
+    clip paths to label together."""
+    groups: dict[tuple[int, str], dict] = {}
+    for path, info in provenance.items():
+        key = (info["run_id"], info["source_video"])
+        group = groups.setdefault(
+            key,
+            {
+                "run_id": info["run_id"],
+                "run_name": info["run_name"],
+                "source_video": info["source_video"],
+                "tracks": {},
+            },
+        )
+        track = group["tracks"].setdefault(info["track_id"], {"track_id": info["track_id"], "clips": []})
+        track["clips"].append({"path": path, "window_index": info["window_index"]})
+
+    out = []
+    for group in groups.values():
+        tracks = sorted(group["tracks"].values(), key=lambda t: t["track_id"])
+        for track in tracks:
+            track["clips"].sort(key=lambda c: c["window_index"])
+        group["tracks"] = tracks
+        group["track_count"] = len(tracks)
+        group["clip_count"] = sum(len(t["clips"]) for t in tracks)
+        out.append(group)
+    out.sort(key=lambda g: (g["source_video"], g["run_id"]))
+    return out

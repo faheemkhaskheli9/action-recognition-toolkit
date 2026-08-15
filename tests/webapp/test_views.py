@@ -256,6 +256,20 @@ def test_delete_entry_with_a_span_removes_only_that_span(client, repo, dataset):
     assert manifest["label"].tolist() == ["idle"]
 
 
+def test_delete_entry_rejects_a_non_numeric_span_instead_of_500ing(client, repo, dataset):
+    video = repo / "data" / "raw" / "a.mp4"
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"x")
+
+    resp = client.post(
+        reverse("core:delete_entry"),
+        {"video_path": str(video.resolve()), "dataset": dataset.slug, "start_time": "not-a-number", "end_time": "3.0"},
+    )
+
+    assert resp.status_code == 302
+    assert resp.url == reverse("core:dataset_list") + f"?dataset={dataset.slug}"
+
+
 # --------------------------------------------------------------------- #
 # datasets.manage_datasets / delete_dataset
 # --------------------------------------------------------------------- #
@@ -290,6 +304,15 @@ def test_manage_datasets_post_rejects_a_blank_name(client, repo):
 
     assert resp.status_code == 200
     assert Dataset.objects.count() == 0
+
+
+def test_manage_datasets_post_rejects_a_colliding_name_instead_of_500ing(client, repo, dataset):
+    # dataset fixture already created "Default" -- posting the same name
+    # used to hit an unhandled IntegrityError straight from the DB.
+    resp = client.post(reverse("core:manage_datasets"), {"name": dataset.name})
+
+    assert resp.status_code == 200
+    assert Dataset.objects.filter(name=dataset.name).count() == 1
 
 
 def test_delete_dataset_removes_the_row_but_keeps_files_by_default(client, repo, dataset):
@@ -527,6 +550,31 @@ def test_extraction_detail_renders_the_per_video_track_breakdown(client, repo):
     assert b"Track 0" in resp.content
 
 
+def test_extraction_detail_import_copy_names_the_real_target_dataset(client, repo, dataset):
+    # Regression guard: the help text used to hardcode "data/raw" and link
+    # to Label/Dataset with no dataset slug, both stale since the Dataset
+    # model replaced the single fixed data/raw folder.
+    run = _extraction_run(repo, dataset=dataset, status=TrackExtractionRun.Status.SUCCEEDED)
+
+    resp = client.get(reverse("core:extraction_detail", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 200
+    assert resp.context["target_dataset"] == dataset
+    assert dataset.video_dir.encode() in resp.content
+    assert f"?dataset={dataset.slug}".encode() in resp.content
+    assert b"data/raw</code> so" not in resp.content
+
+
+def test_extraction_detail_import_copy_prompts_to_create_a_dataset_when_none_exist(client, repo):
+    run = _extraction_run(repo, status=TrackExtractionRun.Status.SUCCEEDED)  # no dataset, none to fall back to
+
+    resp = client.get(reverse("core:extraction_detail", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 200
+    assert resp.context["target_dataset"] is None
+    assert b"Create a dataset first" in resp.content
+
+
 # --------------------------------------------------------------------- #
 # labeling.label_videos
 # --------------------------------------------------------------------- #
@@ -565,6 +613,148 @@ def test_label_videos_ignores_an_unknown_dataset_slug(client, repo, dataset):
     resp = client.get(reverse("core:label_videos"), {"dataset": "does-not-exist"})
 
     assert resp.context["dataset"] == dataset
+
+
+# --------------------------------------------------------------------- #
+# labeling.label_videos / label_track / skip_group -- multi-person groups
+# --------------------------------------------------------------------- #
+
+def _write_tracks_index(output_dir, rows):
+    import csv
+
+    from action_recognition.scripts.extract_tracks import INDEX_FIELDS
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with open(output_dir / "tracks_index.csv", "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=INDEX_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _set_up_imported_track_group(repo, dataset, *, run_name="scene1", track_id=0, windows=2):
+    """A SUCCEEDED extraction run whose clips are already imported into
+    `dataset`'s video_dir under the same naming import_clips uses -- the
+    state provenance_for_dataset/group_clips need to recognize a group."""
+    output_dir = repo / "data" / "tracks" / run_name
+    rows = [
+        {
+            "source_video": "data/raw_scenes/a.mp4", "track_id": track_id, "window_index": i,
+            "start_frame": i * 16, "end_frame": i * 16 + 15, "num_frames": 16,
+            "clip_path": str(output_dir / "a" / f"track{track_id}_win{i}.mp4"),
+        }
+        for i in range(windows)
+    ]
+    _write_tracks_index(output_dir, rows)
+    run = TrackExtractionRun.objects.create(
+        name=run_name, config_path="", video_dir="data/raw_scenes", dataset=dataset,
+        output_dir=str(output_dir), log_file=str(output_dir / "extract.log"),
+        status=TrackExtractionRun.Status.SUCCEEDED,
+    )
+    video_dir = repo / dataset.video_dir
+    video_dir.mkdir(parents=True, exist_ok=True)
+    clips = []
+    for i in range(windows):
+        clip = video_dir / f"{run_name}__a__track{track_id}_win{i}.mp4"
+        clip.write_bytes(b"x")
+        clips.append(clip)
+    return run, clips
+
+
+def test_label_videos_groups_a_multi_person_import_by_source_video(client, repo, dataset):
+    _set_up_imported_track_group(repo, dataset)
+
+    resp = client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+
+    assert resp.status_code == 200
+    assert resp.context["current_unit"]["kind"] == "group"
+    group = resp.context["current_group"]
+    assert group["source_video"] == "a"
+    assert group["track_count"] == 1
+    assert group["clip_count"] == 2
+    assert b"Track 0" in resp.content
+
+
+def test_label_videos_prefers_a_plain_unlabeled_video_over_a_group(client, repo, dataset):
+    _set_up_imported_track_group(repo, dataset)
+    (repo / dataset.video_dir / "z.mp4").write_bytes(b"x")
+
+    resp = client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+
+    assert resp.context["current_unit"] == {"kind": "video", "path": resp.context["current"]}
+    assert resp.context["current_name"] == "z.mp4"
+
+
+def test_label_track_labels_every_window_clip_in_one_write(client, repo, dataset):
+    run, clips = _set_up_imported_track_group(repo, dataset)
+
+    resp = client.post(
+        reverse("core:label_track"),
+        {"dataset": dataset.slug, "run_id": run.pk, "source_video": "a", "track_id": "0", "label": "carrying"},
+    )
+
+    assert resp.status_code == 302
+    manifest = pd.read_csv(repo / "data" / "manifest.csv")
+    assert len(manifest) == 2
+    assert set(manifest["label"]) == {"carrying"}
+    assert sorted(manifest["video_path"]) == sorted(str(c.resolve()) for c in clips)
+
+
+def test_label_track_requires_a_label(client, repo, dataset):
+    run, _ = _set_up_imported_track_group(repo, dataset)
+
+    resp = client.post(
+        reverse("core:label_track"),
+        {"dataset": dataset.slug, "run_id": run.pk, "source_video": "a", "track_id": "0", "label": ""},
+    )
+
+    assert resp.status_code == 302
+    assert not (repo / "data" / "manifest.csv").exists()
+
+
+def test_save_label_with_keep_current_stays_on_the_same_group(client, repo, dataset):
+    # The group template's "label windows separately" fallback passes
+    # keep_current=1 to plain save_label -- labeling one window shouldn't
+    # advance away from a group that still has unlabeled clips.
+    run, clips = _set_up_imported_track_group(repo, dataset, windows=2)
+    first = client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+    assert first.context["current_unit"]["kind"] == "group"
+
+    resp = client.post(
+        reverse("core:save_label"),
+        {"video_path": str(clips[0]), "dataset": dataset.slug, "label": "carrying", "keep_current": "1"},
+    )
+    assert resp.status_code == 302
+
+    second = client.get(reverse("core:label_videos"))
+    assert second.context["current_unit"]["kind"] == "group"  # still on the same group, not advanced
+    assert second.context["current_unit"] == first.context["current_unit"]
+
+
+def test_group_moves_out_of_the_way_once_every_track_is_labeled(client, repo, dataset):
+    run, _ = _set_up_imported_track_group(repo, dataset)
+    client.get(reverse("core:label_videos"), {"dataset": dataset.slug})  # makes the group "current"
+
+    client.post(
+        reverse("core:label_track"),
+        {"dataset": dataset.slug, "run_id": run.pk, "source_video": "a", "track_id": "0", "label": "carrying"},
+    )
+
+    resp = client.get(reverse("core:label_videos"))
+    assert resp.context["current_unit"] is None  # nothing else left to label
+
+
+def test_skip_group_hides_it_and_falls_back_to_the_empty_state(client, repo, dataset):
+    run, _ = _set_up_imported_track_group(repo, dataset)
+    client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+
+    resp = client.post(
+        reverse("core:skip_group"),
+        {"dataset": dataset.slug, "run_id": run.pk, "source_video": "a"},
+    )
+
+    assert resp.status_code == 302
+    resp = client.get(reverse("core:label_videos"))
+    assert resp.context["current_unit"] is None
 
 
 # --------------------------------------------------------------------- #
@@ -615,11 +805,22 @@ def test_skip_video_hides_it_from_the_next_pick(client, repo, dataset):
     b.write_bytes(b"x")
 
     client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
-    skip_resp = client.post(reverse("core:skip_video"), {"video_path": str(a.resolve())})
+    skip_resp = client.post(
+        reverse("core:skip_video"), {"video_path": str(a.resolve()), "dataset": dataset.slug}
+    )
     assert skip_resp.status_code == 302
 
     resp = client.get(reverse("core:label_videos"))
     assert resp.context["current_name"] == "b.mp4"
+
+
+def test_skip_video_requires_a_dataset(client, repo, dataset):
+    # Regression guard: skip_video used to have no dataset context at all,
+    # so its session bookkeeping couldn't be scoped per dataset.
+    resp = client.post(reverse("core:skip_video"), {"video_path": "data/raw/a.mp4"})
+
+    assert resp.status_code == 302
+    assert resp.url == reverse("core:manage_datasets")
 
 
 # --------------------------------------------------------------------- #
@@ -699,11 +900,45 @@ def test_finish_video_advances_to_the_next_video(client, repo, dataset):
             "end_time": "3.0",
         },
     )
-    finish_resp = client.post(reverse("core:finish_video"))
+    finish_resp = client.post(reverse("core:finish_video"), {"dataset": dataset.slug})
     assert finish_resp.status_code == 302
 
     resp = client.get(reverse("core:label_videos"))
     assert resp.context["current_name"] == "b.mp4"
+
+
+def test_switching_datasets_mid_label_does_not_leak_the_old_datasets_current_video(client, repo, dataset):
+    # Regression guard: current_video/skipped used to be flat, unscoped
+    # session keys. Switching datasets via the picker without finishing the
+    # video left the old dataset's video "current" under the new dataset,
+    # so saving a label would write dataset A's video path into dataset B's
+    # manifest.
+    other = Dataset.objects.create(name="Other", slug="other", video_dir="data/other", manifest_path="data/other.csv")
+
+    a_dir = repo / "data" / "raw"
+    a_dir.mkdir(parents=True)
+    (a_dir / "a.mp4").write_bytes(b"x")
+    b_dir = repo / "data" / "other"
+    b_dir.mkdir(parents=True)
+    (b_dir / "b.mp4").write_bytes(b"x")
+
+    first = client.get(reverse("core:label_videos"), {"dataset": dataset.slug})
+    assert first.context["current_name"] == "a.mp4"
+
+    # Switch datasets without finishing/skipping -- same as clicking the
+    # dataset picker mid-label.
+    second = client.get(reverse("core:label_videos"), {"dataset": other.slug})
+    assert second.context["current_name"] == "b.mp4"  # not a.mp4 leaking from the old dataset
+
+    resp = client.post(
+        reverse("core:save_label"),
+        {"label": "jump", "video_path": second.context["current"], "dataset": other.slug},
+    )
+    assert resp.status_code == 302
+
+    other_manifest = pd.read_csv(repo / "data" / "other.csv")
+    assert other_manifest.iloc[0]["video_path"].endswith("b.mp4")
+    assert not (repo / "data" / "manifest.csv").exists()  # dataset A's manifest untouched
 
 
 def test_delete_span_removes_only_that_span(client, repo, dataset):

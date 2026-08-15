@@ -1,0 +1,82 @@
+{# Grouped labeling for one multi-person source video imported from a track
+   extraction run (services.extraction.provenance_for_dataset/group_clips).
+   One row per tracked person; labeling a track applies the same label to
+   every window clip it was split into (the common case), with a
+   per-window fallback for tracks whose action changes partway through. #}
+<div class="card">
+  <h2 class="mt-0">
+    {{ current_group.source_video }}
+    <span class="muted" style="font-weight:400;">
+      &mdash; multi-person import ({{ current_group.run_name }}) &middot;
+      {{ current_group.track_count }} track{{ current_group.track_count|pluralize }},
+      {{ current_group.clip_count }} clip{{ current_group.clip_count|pluralize }}
+    </span>
+  </h2>
+  <p class="muted">
+    Each track below is one person <code>ar-extract-tracks</code> followed
+    through this video. Label a whole track in one go if it's a single
+    continuous action, or expand it to label its window clips separately if
+    the action changes partway through.
+  </p>
+
+  {% for track in current_group.tracks %}
+    <div class="track-row{% if track.labeled %} track-row-done{% endif %}">
+      <div class="track-row-header">
+        <h3 class="m-0">
+          Track {{ track.track_id }}
+          {% if track.labeled %}<span class="status-pill status-succeeded">Labeled</span>{% endif %}
+        </h3>
+        <div class="track-filmstrip">
+          {% for clip in track.clips %}
+            <video class="thumb" preload="metadata" muted playsinline title="{{ clip.name }}">
+              <source src="{% url 'core:serve_video' %}?path={{ clip.path|urlencode }}#t=0.1">
+            </video>
+          {% endfor %}
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'core:label_track' %}" class="track-label-form">
+        {% csrf_token %}
+        <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+        <input type="hidden" name="run_id" value="{{ current_group.run_id }}">
+        <input type="hidden" name="source_video" value="{{ current_group.source_video }}">
+        <input type="hidden" name="track_id" value="{{ track.track_id }}">
+        <div class="field">
+          <input type="text" name="label" list="known-labels" placeholder="Label this whole track">
+          {% include "core/_label_chips.html" %}
+        </div>
+        <button type="submit">Label track ({{ track.clips|length }} clip{{ track.clips|length|pluralize }})</button>
+      </form>
+
+      <details class="track-windows">
+        <summary class="muted">Label windows separately instead</summary>
+        {% for clip in track.clips %}
+          <form method="post" action="{% url 'core:save_label' %}" class="track-window-form">
+            {% csrf_token %}
+            <input type="hidden" name="video_path" value="{{ clip.path }}">
+            <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+            <input type="hidden" name="keep_current" value="1">
+            <span class="muted">Window {{ clip.window_index }}{% if clip.labeled %} &mdash; labeled{% endif %}</span>
+            <input type="text" name="label" list="known-labels" placeholder="Label this window">
+            <button type="submit" class="ghost">Save</button>
+          </form>
+        {% endfor %}
+      </details>
+    </div>
+  {% endfor %}
+
+  <div class="actions mt-3">
+    <form method="post" action="{% url 'core:finish_video' %}" class="inline-form">
+      {% csrf_token %}
+      <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+      <button type="submit" class="secondary">Done with this video &mdash; next</button>
+    </form>
+    <form method="post" action="{% url 'core:skip_group' %}" class="inline-form">
+      {% csrf_token %}
+      <input type="hidden" name="dataset" value="{{ dataset.slug }}">
+      <input type="hidden" name="run_id" value="{{ current_group.run_id }}">
+      <input type="hidden" name="source_video" value="{{ current_group.source_video }}">
+      <button type="submit" class="ghost">Skip this video</button>
+    </form>
+  </div>
+</div>
