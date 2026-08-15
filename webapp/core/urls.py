@@ -34,10 +34,12 @@ urlpatterns = [
     path("extraction/<int:pk>/", extraction.extraction_detail, name="extraction_detail"),
     path("extraction/<int:pk>/log/", extraction.extraction_log_partial, name="extraction_log_partial"),
     path("extraction/<int:pk>/resume/", extraction.resume_extraction, name="resume_extraction"),
+    path("extraction/<int:pk>/cancel/", extraction.cancel_extraction, name="cancel_extraction"),
     path("extraction/<int:pk>/import/", extraction.import_extraction_clips, name="import_extraction_clips"),
     path("training/new/", training.start_training, name="start_training"),
     path("runs/", runs.run_list, name="run_list"),
     path("runs/<int:pk>/", runs.run_detail, name="run_detail"),
     path("runs/<int:pk>/log/", runs.run_log_partial, name="run_log_partial"),
+    path("runs/<int:pk>/cancel/", runs.cancel_run, name="cancel_run"),
     path("inference/", inference.inference, name="inference"),
 ]

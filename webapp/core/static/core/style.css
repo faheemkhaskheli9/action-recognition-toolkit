@@ -392,6 +392,7 @@ a.status-pill:hover { filter: brightness(1.08); }
 .status-running { background: var(--warning-bg); color: var(--warning); }
 .status-succeeded { background: var(--success-bg); color: var(--success); }
 .status-failed { background: var(--danger-bg); color: var(--danger); }
+.status-cancelled { background: var(--bg-raised); color: var(--muted); }
 /* A poll request failed (dropped connection, dev-server restart) -- the log
    shown may be behind. Dashed outline rather than a color change since the
    pill's color already carries the run's actual status. */

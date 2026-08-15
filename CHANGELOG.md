@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- Training and extraction runs can now be cancelled from the webapp: a
+  "Cancel run" button on the run's detail page (shown only while it's
+  `RUNNING`) terminates its OS process tree and marks it `CANCELLED` — a
+  status distinct from `FAILED` so the run list/detail page can tell "the
+  user stopped this" from "this crashed." A cancelled extraction run can be
+  resumed afterward the same way a failed one can
+  (`services.extraction.can_resume`/`resume_run` already keyed off "not
+  RUNNING," so no change needed there). `services._background` grows a
+  matching `terminate()` alongside its existing `launch_detached`/
+  `is_pid_alive` — it kills the whole process tree the run's wrapper
+  started (`os.killpg` on POSIX, `taskkill /T /F` on Windows), not just the
+  tracked pid, since the wrapper runs the real command as its own child
+  rather than exec'ing into it.
 - Dataset table, Extraction runs, Training runs, and Review manifest now
   paginate at 50 rows/runs per page (`core.paginate.paginate`, a thin
   wrapper around Django's `Paginator`) instead of rendering every row at

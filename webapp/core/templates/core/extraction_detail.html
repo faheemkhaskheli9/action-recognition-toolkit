@@ -25,7 +25,15 @@
     </div>
   </div>
 
-  {% if run.status == "failed" %}
+  {% if run.status == "running" %}
+    <div class="actions">
+      <form method="post" action="{% url 'core:cancel_extraction' run.pk %}" onsubmit="return confirm('Stop this extraction run? You can resume it afterward from where it stopped.');">
+        {% csrf_token %}
+        <button type="submit" class="danger">Cancel run</button>
+      </form>
+    </div>
+  {% endif %}
+  {% if run.status == "failed" or run.status == "cancelled" %}
     <div class="actions">
       <form method="post" action="{% url 'core:resume_extraction' run.pk %}">
         {% csrf_token %}
