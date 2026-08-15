@@ -398,6 +398,14 @@ a.status-pill:hover { filter: brightness(1.08); }
    pill's color already carries the run's actual status. */
 .status-pill-stale { outline: 2px dashed currentColor; outline-offset: 2px; }
 
+.pager {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+.pager-disabled { color: var(--muted); opacity: 0.5; }
+
 .badge {
   display: inline-block;
   padding: 0.1rem 0.5rem;

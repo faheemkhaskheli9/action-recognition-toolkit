@@ -15,6 +15,7 @@ from django.urls import reverse
 
 from .. import services
 from ..models import Dataset
+from ..paginate import paginate
 from ..paths import is_within_repo, resolve_repo_path
 
 _UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
@@ -57,9 +58,14 @@ def dataset_list(request):
         if row["labeled"]:
             label_counts[row["label"]] = label_counts.get(row["label"], 0) + 1
 
+    # total/labeled_count/unlabeled_count/label_counts are dataset-wide
+    # stats -- computed from every row before paginating, since only the
+    # table itself (`rows`) should shrink to one page's worth.
+    page = paginate(request, rows)
     context.update(
         {
-            "rows": rows,
+            "rows": page.object_list,
+            "page_obj": page,
             "total": len(rows),
             "labeled_count": labeled_count,
             "unlabeled_count": len(rows) - labeled_count,

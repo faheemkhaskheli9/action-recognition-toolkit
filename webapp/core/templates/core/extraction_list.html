@@ -5,7 +5,7 @@
 <p><a href="{% url 'core:start_extraction' %}" class="btn">+ New extraction</a></p>
 
 {% if runs %}
-<input type="search" class="table-filter" data-table-filter="#extraction-table" placeholder="Filter by name or video dir…">
+<input type="search" class="table-filter" data-table-filter="#extraction-table" placeholder="Filter by name or video dir… (this page only)">
 <div class="table-wrap">
 <table id="extraction-table">
   <thead>
@@ -28,6 +28,7 @@
   </tbody>
 </table>
 </div>
+{% include "core/_pager.html" %}
 {% else %}
   <div class="empty-state">
     No extraction runs yet — <a href="{% url 'core:start_extraction' %}">start one</a> from raw footage.
