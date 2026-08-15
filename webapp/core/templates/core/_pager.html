@@ -1,0 +1,20 @@
+{# Shared prev/next pager for a page_obj (django.core.paginator.Page) --
+   included on every paginated list page (Dataset table, Extraction/Training
+   run lists, Review manifest). {% querystring %} (Django 5.1+) preserves
+   every other query param already on the URL (e.g. ?dataset=<slug>),
+   swapping in just `page`. #}
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pager" aria-label="Pagination">
+  {% if page_obj.has_previous %}
+    <a href="?{% querystring page=page_obj.previous_page_number %}">&larr; Prev</a>
+  {% else %}
+    <span class="pager-disabled">&larr; Prev</span>
+  {% endif %}
+  <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}
+    <a href="?{% querystring page=page_obj.next_page_number %}">Next &rarr;</a>
+  {% else %}
+    <span class="pager-disabled">Next &rarr;</span>
+  {% endif %}
+</nav>
+{% endif %}
