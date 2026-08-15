@@ -500,6 +500,63 @@ def test_resume_extraction_rejects_a_running_run(client, repo):
     assert run.pid == os.getpid()
 
 
+def test_cancel_extraction_stops_a_running_run(client, repo, monkeypatch):
+    import os
+
+    from core.services import extraction as extraction_service
+
+    terminated = {}
+    monkeypatch.setattr(
+        extraction_service._background, "terminate", lambda pid: terminated.setdefault("pid", pid)
+    )
+    # refresh_status (called before cancel_run) would otherwise see a dead
+    # pid and flip this to FAILED before cancel_run gets a chance to run --
+    # use a real, currently-alive pid, same as _running_run does for training.
+    run = _extraction_run(repo, status=TrackExtractionRun.Status.RUNNING, pid=os.getpid())
+
+    resp = client.post(reverse("core:cancel_extraction", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 302
+    assert terminated["pid"] == os.getpid()
+    run.refresh_from_db()
+    assert run.status == TrackExtractionRun.Status.CANCELLED
+
+
+def test_cancel_extraction_rejects_an_already_stopped_run(client, repo, monkeypatch):
+    from core.services import extraction as extraction_service
+
+    terminated = {}
+    monkeypatch.setattr(
+        extraction_service._background, "terminate", lambda pid: terminated.setdefault("pid", pid)
+    )
+    run = _extraction_run(repo, status=TrackExtractionRun.Status.FAILED, return_code=1)
+
+    resp = client.post(reverse("core:cancel_extraction", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 302
+    assert "pid" not in terminated
+    run.refresh_from_db()
+    assert run.status == TrackExtractionRun.Status.FAILED
+
+
+def test_cancelled_extraction_run_can_be_resumed(client, repo, monkeypatch):
+    from core.services import extraction as extraction_service
+
+    def fake_launch_detached(argv, **kwargs):
+        kwargs["log_file"].touch()
+        return 6666
+
+    monkeypatch.setattr(extraction_service._background, "launch_detached", fake_launch_detached)
+    run = _extraction_run(repo, status=TrackExtractionRun.Status.CANCELLED, return_code=None)
+
+    resp = client.post(reverse("core:resume_extraction", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 302
+    run.refresh_from_db()
+    assert run.status == TrackExtractionRun.Status.RUNNING
+    assert run.pid == 6666
+
+
 def test_extraction_list_renders_with_runs(client, repo):
     _extraction_run(repo)
 
@@ -520,6 +577,15 @@ def test_extraction_detail_renders_progress_for_a_running_run(client, repo):
     assert resp.status_code == 200
     assert resp.context["progress"] == {"video": "a.mp4", "current": 1, "total": 2}
     assert b"video 1 of 2" in resp.content
+    assert b"Cancel run" in resp.content
+
+
+def test_extraction_detail_hides_cancel_button_once_stopped(client, repo):
+    run = _extraction_run(repo, status=TrackExtractionRun.Status.SUCCEEDED, return_code=0)
+
+    resp = client.get(reverse("core:extraction_detail", kwargs={"pk": run.pk}))
+
+    assert b"Cancel run" not in resp.content
 
 
 def test_extraction_detail_renders_the_per_video_track_breakdown(client, repo):
@@ -1180,6 +1246,16 @@ def test_run_detail_404_for_unknown_pk(client, repo):
     assert resp.status_code == 404
 
 
+def test_run_detail_shows_cancel_button_only_while_running(client, repo):
+    running = _running_run(repo)
+    resp = client.get(reverse("core:run_detail", kwargs={"pk": running.pk}))
+    assert b"Cancel run" in resp.content
+
+    stopped = _running_run(repo, name="exp2", status=TrainingRun.Status.SUCCEEDED, return_code=0)
+    resp = client.get(reverse("core:run_detail", kwargs={"pk": stopped.pk}))
+    assert b"Cancel run" not in resp.content
+
+
 def test_run_log_partial_returns_json_status(client, repo):
     run = _running_run(repo)
 
@@ -1189,6 +1265,50 @@ def test_run_log_partial_returns_json_status(client, repo):
     payload = resp.json()
     assert payload["status"] == TrainingRun.Status.RUNNING
     assert "epoch 1" in payload["log_tail"]
+
+
+def test_cancel_run_stops_a_running_run(client, repo, monkeypatch):
+    from core.services import training as training_service
+
+    terminated = {}
+    monkeypatch.setattr(
+        training_service._background, "terminate", lambda pid: terminated.setdefault("pid", pid)
+    )
+    run = _running_run(repo)
+
+    resp = client.post(reverse("core:cancel_run", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 302
+    assert terminated["pid"] == run.pid
+    run.refresh_from_db()
+    assert run.status == TrainingRun.Status.CANCELLED
+
+
+def test_cancel_run_rejects_an_already_stopped_run(client, repo, monkeypatch):
+    from core.services import training as training_service
+
+    terminated = {}
+    monkeypatch.setattr(
+        training_service._background, "terminate", lambda pid: terminated.setdefault("pid", pid)
+    )
+    run = _running_run(repo, status=TrainingRun.Status.SUCCEEDED, return_code=0)
+
+    resp = client.post(reverse("core:cancel_run", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 302
+    assert "pid" not in terminated
+    run.refresh_from_db()
+    assert run.status == TrainingRun.Status.SUCCEEDED
+
+
+def test_cancel_run_get_is_not_allowed(client, repo):
+    run = _running_run(repo)
+
+    resp = client.get(reverse("core:cancel_run", kwargs={"pk": run.pk}))
+
+    assert resp.status_code == 302
+    run.refresh_from_db()
+    assert run.status == TrainingRun.Status.RUNNING
 
 
 # --------------------------------------------------------------------- #

@@ -83,6 +83,25 @@ def is_pid_alive(pid: int | None) -> bool:
     return _background.is_pid_alive(pid)
 
 
+def cancel_run(run: TrainingRun) -> TrainingRun:
+    """Terminate a running run's OS process tree and mark it CANCELLED --
+    kept distinct from FAILED (which refresh_status assigns to a run that
+    stopped on its own, e.g. crashed) so the log/run list can tell "the
+    user stopped this" from "this crashed." Set eagerly rather than left
+    for the next refresh_status to notice the pid died: that would read as
+    FAILED, which is exactly the distinction this exists to avoid. Only
+    meaningful while RUNNING; a no-op otherwise -- call refresh_status
+    first so a merely-stale RUNNING row isn't cancelled after it already
+    finished some other way."""
+    if run.status != TrainingRun.Status.RUNNING:
+        return run
+    _background.terminate(run.pid)
+    run.status = TrainingRun.Status.CANCELLED
+    run.finished_at = timezone.now()
+    run.save()
+    return run
+
+
 def _read_exit_code(log_file: Path) -> int | None:
     if not log_file.exists():
         return None

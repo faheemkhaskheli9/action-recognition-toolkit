@@ -54,11 +54,14 @@ Pages:
   That folder is then just another folder of clips — hand it to the Label
   page below like any other.
 - **Extraction runs** — list of past/running extraction runs and their logs.
+  A running one can be cancelled from its detail page, then resumed later
+  from where it stopped.
 - **Review manifest** — edit or delete previously labeled rows.
 - **Train** — pick a config, optionally override manifest/model/epochs/batch
   size, and launch `ar-train` as a detached background process.
 - **Runs** — list of past/running runs; a run's detail page tails its log
-  live and lists any `best.pt`/`last.pt` it produced.
+  live, lists any `best.pt`/`last.pt` it produced, and can cancel it while
+  it's still running.
 - **Inference** — upload a video (or pick one already in your dataset), pick
   a checkpoint from a finished run, get top-k predictions. Check "scene
   mode" if the video has multiple people — it detects+tracks each one and
