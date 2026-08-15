@@ -7,6 +7,7 @@ Windows cmd wrapper, exit-marker append, pid liveness probe) previously had
 no test of their own, only mocked-out call-site assertions in
 test_training_service.py/test_views.py.
 """
+import subprocess
 import sys
 import time
 
@@ -77,6 +78,32 @@ def test_is_pid_alive_true_for_running_process_false_after_it_exits(tmp_path):
 
 def test_is_pid_alive_false_for_none():
     assert _background.is_pid_alive(None) is False
+
+
+def test_terminate_stops_a_running_detached_process(tmp_path):
+    log_file = tmp_path / "run.log"
+    argv = [sys.executable, "-c", "import time; time.sleep(30)"]
+
+    pid = _background.launch_detached(argv, log_file=log_file, exit_marker_prefix="EXIT:", cwd=tmp_path)
+    assert _background.is_pid_alive(pid) is True
+
+    _background.terminate(pid)
+
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline and _background.is_pid_alive(pid):
+        time.sleep(0.05)
+    assert _background.is_pid_alive(pid) is False
+
+
+def test_terminate_is_a_noop_for_none():
+    _background.terminate(None)  # must not raise
+
+
+def test_terminate_is_a_noop_for_an_already_dead_pid(tmp_path):
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait()
+
+    _background.terminate(proc.pid)  # must not raise even though it's gone
 
 
 def test_launch_detached_append_keeps_prior_log_content(tmp_path):

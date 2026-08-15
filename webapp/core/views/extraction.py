@@ -89,6 +89,22 @@ def resume_extraction(request, pk):
     return redirect("core:extraction_detail", pk=pk)
 
 
+def cancel_extraction(request, pk):
+    if request.method != "POST":
+        return redirect("core:extraction_detail", pk=pk)
+
+    run = get_object_or_404(TrackExtractionRun, pk=pk)
+    services.extraction.refresh_status(run)
+
+    if run.status != TrackExtractionRun.Status.RUNNING:
+        messages.error(request, "This run has already stopped.")
+        return redirect("core:extraction_detail", pk=pk)
+
+    services.extraction.cancel_run(run)
+    messages.success(request, f"Cancelled track extraction '{run.name}'.")
+    return redirect("core:extraction_detail", pk=pk)
+
+
 def import_extraction_clips(request, pk):
     if request.method != "POST":
         return redirect("core:extraction_detail", pk=pk)

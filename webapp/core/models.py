@@ -35,6 +35,7 @@ class TrackExtractionRun(models.Model):
         RUNNING = "running", "Running"
         SUCCEEDED = "succeeded", "Succeeded"
         FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
 
     name = models.CharField(max_length=255)
     config_path = models.CharField(max_length=500)
@@ -75,6 +76,7 @@ class TrainingRun(models.Model):
         RUNNING = "running", "Running"
         SUCCEEDED = "succeeded", "Succeeded"
         FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
 
     name = models.CharField(max_length=255)
     model_name = models.CharField(max_length=100)
