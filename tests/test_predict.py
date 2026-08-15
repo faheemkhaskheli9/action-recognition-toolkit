@@ -62,6 +62,32 @@ def test_predict_runs_on_explicit_cpu_device(synthetic_video, tmp_path):
     assert results[0][0] in label_map
 
 
+def test_predict_uses_resolve_device_instead_of_always_defaulting_to_cpu(synthetic_video, tmp_path, monkeypatch):
+    # Regression guard: predict() used to hardcode torch.device("cpu")
+    # whenever --device wasn't given, ignoring an available GPU even though
+    # train.py/scene_predict.py/the detector all autodetect via
+    # resolve_device(). Confirm predict() now goes through the same call.
+    label_map = {"jump": 0, "wave": 1}
+    checkpoint_path = _write_tiny_checkpoint(tmp_path / "best.pt", label_map)
+
+    from action_recognition.inference import predict as predict_module
+
+    captured = {}
+    real_resolve_device = predict_module.resolve_device
+
+    def fake_resolve_device(requested=None):
+        captured["requested"] = requested
+        return real_resolve_device(requested)
+
+    monkeypatch.setattr(predict_module, "resolve_device", fake_resolve_device)
+
+    results = predict(checkpoint_path, synthetic_video, top_k=1)
+
+    assert "requested" in captured  # predict() went through resolve_device(), not a hardcoded default
+    assert captured["requested"] is None  # no --device given
+    assert results[0][0] in label_map
+
+
 def test_predict_scene_passes_resolved_device_to_detector(synthetic_video, tmp_path, monkeypatch):
     # Regression guard: the detector used to be built with no device at all
     # (always CPU) even when the classifier model itself ran on a requested

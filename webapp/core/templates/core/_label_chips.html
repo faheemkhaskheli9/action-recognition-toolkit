@@ -1,0 +1,19 @@
+{% if known_labels %}
+  {# Clickable quick-pick labels -- clicking fills the nearest label input in
+     the same <form> (see app.js's chip handler). The first 9 get a number
+     badge that the label-page keyboard shortcut (1-9, only while no text
+     input is focused) can fill+submit directly. #}
+  <div class="label-chips" role="group" aria-label="Quick-pick labels">
+    {% for label in known_labels %}
+      <button
+        type="button"
+        class="chip"
+        data-label-chip
+        data-label-value="{{ label }}"
+        {% if forloop.counter <= 9 %}data-chip-key="{{ forloop.counter }}"{% endif %}
+      >
+        {% if forloop.counter <= 9 %}<kbd class="chip-key">{{ forloop.counter }}</kbd>{% endif %}{{ label }}
+      </button>
+    {% endfor %}
+  </div>
+{% endif %}

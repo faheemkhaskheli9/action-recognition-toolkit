@@ -45,12 +45,18 @@
         <button type="submit">Import clips into dataset</button>
       </form>
       <p class="muted m-0">
-        Copies clips from <code>{{ run.output_dir }}</code> into
-        <code>data/raw</code> so they show up on
-        <a href="{% url 'core:label_videos' %}">Label</a> and
-        <a href="{% url 'core:dataset_list' %}">Dataset</a>. Safe to click
-        again after a later run — already-imported clips are skipped. (Or run
-        <code>ar-build-manifest</code> straight against
+        {% if target_dataset %}
+          Copies clips from <code>{{ run.output_dir }}</code> into
+          <code>{{ target_dataset.video_dir }}</code> ({{ target_dataset.name }}) so
+          they show up on
+          <a href="{% url 'core:label_videos' %}?dataset={{ target_dataset.slug }}">Label</a> and
+          <a href="{% url 'core:dataset_list' %}?dataset={{ target_dataset.slug }}">Dataset</a>.
+          Safe to click again after a later run — already-imported clips are
+          skipped.
+        {% else %}
+          Create a dataset first to import these clips into.
+        {% endif %}
+        (Or run <code>ar-build-manifest</code> straight against
         <code>{{ run.output_dir }}</code> from the CLI instead.)
       </p>
     </div>
