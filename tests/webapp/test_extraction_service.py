@@ -78,7 +78,7 @@ def test_start_run_with_a_single_video_uses_that_path_instead(settings, tmp_path
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "status",
-    [TrackExtractionRun.Status.FAILED, TrackExtractionRun.Status.SUCCEEDED],
+    [TrackExtractionRun.Status.FAILED, TrackExtractionRun.Status.SUCCEEDED, TrackExtractionRun.Status.CANCELLED],
 )
 def test_can_resume_true_when_not_running(status):
     run = _make_run(status=status)
@@ -89,6 +89,39 @@ def test_can_resume_true_when_not_running(status):
 def test_can_resume_false_while_running():
     run = _make_run(status=TrackExtractionRun.Status.RUNNING)
     assert extraction_service.can_resume(run) is False
+
+
+# --------------------------------------------------------------------- #
+# cancel_run
+# --------------------------------------------------------------------- #
+
+@pytest.mark.django_db
+def test_cancel_run_terminates_process_and_marks_cancelled(monkeypatch):
+    terminated = {}
+    monkeypatch.setattr(
+        extraction_service._background, "terminate", lambda pid: terminated.setdefault("pid", pid)
+    )
+    run = _make_run(status=TrackExtractionRun.Status.RUNNING, pid=4242)
+
+    result = extraction_service.cancel_run(run)
+
+    assert terminated["pid"] == 4242
+    assert result.status == TrackExtractionRun.Status.CANCELLED
+    assert result.finished_at is not None
+
+
+@pytest.mark.django_db
+def test_cancel_run_is_a_noop_for_a_non_running_run(monkeypatch):
+    terminated = {}
+    monkeypatch.setattr(
+        extraction_service._background, "terminate", lambda pid: terminated.setdefault("pid", pid)
+    )
+    run = _make_run(status=TrackExtractionRun.Status.SUCCEEDED)
+
+    result = extraction_service.cancel_run(run)
+
+    assert "pid" not in terminated
+    assert result.status == TrackExtractionRun.Status.SUCCEEDED
 
 
 # --------------------------------------------------------------------- #

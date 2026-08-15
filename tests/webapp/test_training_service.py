@@ -209,6 +209,39 @@ def test_refresh_status_does_not_recheck_a_finished_run():
 
 
 # --------------------------------------------------------------------- #
+# cancel_run
+# --------------------------------------------------------------------- #
+
+@pytest.mark.django_db
+def test_cancel_run_terminates_process_and_marks_cancelled(monkeypatch):
+    terminated = {}
+    monkeypatch.setattr(
+        training_service._background, "terminate", lambda pid: terminated.setdefault("pid", pid)
+    )
+    run = _make_run(pid=4242)
+
+    result = training_service.cancel_run(run)
+
+    assert terminated["pid"] == 4242
+    assert result.status == TrainingRun.Status.CANCELLED
+    assert result.finished_at is not None
+
+
+@pytest.mark.django_db
+def test_cancel_run_is_a_noop_for_a_non_running_run(monkeypatch):
+    terminated = {}
+    monkeypatch.setattr(
+        training_service._background, "terminate", lambda pid: terminated.setdefault("pid", pid)
+    )
+    run = _make_run(status=TrainingRun.Status.SUCCEEDED, return_code=0)
+
+    result = training_service.cancel_run(run)
+
+    assert "pid" not in terminated
+    assert result.status == TrainingRun.Status.SUCCEEDED
+
+
+# --------------------------------------------------------------------- #
 # tail_log / checkpoints
 # --------------------------------------------------------------------- #
 
