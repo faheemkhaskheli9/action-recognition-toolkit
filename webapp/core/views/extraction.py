@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from .. import services
 from ..forms import StartExtractionForm
 from ..models import TrackExtractionRun
+from ..paginate import paginate
 from ..paths import resolve_repo_path
 
 
@@ -47,12 +48,16 @@ def start_extraction(request):
 
 
 def extraction_list(request):
-    runs = list(TrackExtractionRun.objects.all())
+    # refresh_status/clip_count/progress only for the runs actually shown --
+    # each reads that run's log file (and clip_count may scan its output
+    # dir), no reason to pay that cost for the whole history on every load.
+    page = paginate(request, TrackExtractionRun.objects.all())
+    runs = list(page.object_list)
     for run in runs:
         services.extraction.refresh_status(run)
         run.clip_count = services.extraction.clip_count(run)
         run.progress = services.extraction.progress(run) if run.status == TrackExtractionRun.Status.RUNNING else None
-    return render(request, "core/extraction_list.html", {"runs": runs})
+    return render(request, "core/extraction_list.html", {"runs": runs, "page_obj": page})
 
 
 def extraction_detail(request, pk):

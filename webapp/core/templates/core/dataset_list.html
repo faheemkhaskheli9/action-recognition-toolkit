@@ -108,7 +108,7 @@
   </p>
 
   {% if rows %}
-  <input type="search" class="table-filter" data-table-filter="#dataset-table" placeholder="Filter by name or label…">
+  <input type="search" class="table-filter" data-table-filter="#dataset-table" placeholder="Filter by name or label… (this page only)">
   <div class="table-wrap responsive-stack">
   <table id="dataset-table">
     <thead>
@@ -175,6 +175,7 @@
     </tbody>
   </table>
   </div>
+  {% include "core/_pager.html" %}
   {% else %}
     <div class="empty-state">No videos yet — upload some above.</div>
   {% endif %}

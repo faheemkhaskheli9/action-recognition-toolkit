@@ -13,6 +13,7 @@ from django.urls import reverse
 from .. import services
 from ..forms import ManifestFormSet
 from ..models import Dataset
+from ..paginate import paginate
 from ..paths import is_within_repo, resolve_repo_path
 
 
@@ -368,6 +369,18 @@ def review_manifest(request):
     has_split = "split" in manifest.columns
     has_spans = "start_time" in manifest.columns
 
+    # Paginated over row *position*, not row data -- GET builds the
+    # formset's initial data from manifest.iloc[start:end]; POST needs that
+    # same [start:end) to know which slice of the full manifest this page's
+    # (possibly edited/deleted) formset replaces, so the same page() call
+    # against the same-length manifest gives both sides identical bounds
+    # without POST having to re-derive anything from submitted data. The
+    # form has no explicit action, so it resubmits to the current URL --
+    # request.GET (built from the URL's query string regardless of method)
+    # still has ?page= on POST, no hidden field needed.
+    page = paginate(request, range(len(manifest)))
+    start, end = max(page.start_index() - 1, 0), page.end_index()
+
     if request.method == "POST":
         formset = ManifestFormSet(request.POST)
         if formset.is_valid():
@@ -388,10 +401,15 @@ def review_manifest(request):
                 + (["split"] if has_split else [])
                 + (["start_time", "end_time"] if has_spans else [])
             )
-            new_df = pd.DataFrame(rows, columns=columns)
+            page_df = pd.DataFrame(rows, columns=columns)
+            # Splice this page's rows back in at the position they came
+            # from -- every row outside [start:end), on any other page,
+            # wasn't part of this page's formset and so is carried through
+            # untouched no matter how many pages the manifest spans.
+            new_df = pd.concat([manifest.iloc[:start], page_df, manifest.iloc[end:]], ignore_index=True)
             services.manifest.write_manifest(new_df, manifest_path)
-            messages.success(request, f"Saved {len(new_df)} rows to {manifest_path}")
-            return redirect(f"{reverse('core:review_manifest')}?dataset={dataset.slug}")
+            messages.success(request, f"Saved {len(page_df)} row(s) to {manifest_path}")
+            return redirect(f"{reverse('core:review_manifest')}?dataset={dataset.slug}&page={page.number}")
     else:
         initial = [
             {
@@ -407,7 +425,7 @@ def review_manifest(request):
                     else ""
                 ),
             }
-            for _, row in manifest.iterrows()
+            for _, row in manifest.iloc[start:end].iterrows()
         ]
         formset = ManifestFormSet(initial=initial)
 
@@ -420,5 +438,6 @@ def review_manifest(request):
             "datasets": Dataset.objects.all(),
             "has_split": has_split,
             "has_spans": has_spans,
+            "page_obj": page,
         },
     )
