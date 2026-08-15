@@ -118,6 +118,24 @@ def is_pid_alive(pid: int | None) -> bool:
     return _background.is_pid_alive(pid)
 
 
+def cancel_run(run: TrackExtractionRun) -> TrackExtractionRun:
+    """Terminate a running run's OS process tree and mark it CANCELLED --
+    same distinction from FAILED, and same reasoning for setting it
+    eagerly rather than leaving it for refresh_status, as
+    services.training.cancel_run. A cancelled run is stopped, not
+    resumable to pick back up where it left off, the same as any other
+    not-RUNNING status -- can_resume/resume_run already key off "not
+    RUNNING", so no change needed there for a cancelled run to become
+    resumable."""
+    if run.status != TrackExtractionRun.Status.RUNNING:
+        return run
+    _background.terminate(run.pid)
+    run.status = TrackExtractionRun.Status.CANCELLED
+    run.finished_at = timezone.now()
+    run.save()
+    return run
+
+
 def _read_exit_code(log_file: Path) -> int | None:
     if not log_file.exists():
         return None

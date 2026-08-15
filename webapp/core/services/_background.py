@@ -29,6 +29,7 @@ from __future__ import annotations
 import ctypes
 import os
 import shlex
+import signal
 import subprocess
 import threading
 from pathlib import Path
@@ -84,6 +85,32 @@ def launch_detached(
         # reparents and reaps it instead).
         threading.Thread(target=proc.wait, daemon=True).start()
     return proc.pid
+
+
+def terminate(pid: int | None) -> None:
+    """Stop the process tree rooted at pid -- the wrapper (`bash -c`/
+    `cmd /v:on`) launch_detached started plus whatever it launched.
+
+    Killing just the tracked pid isn't enough on either platform: the
+    wrapper runs the real command as its own child rather than exec'ing
+    into it (so the marker line can still be appended after), so the
+    training/extraction process itself would be orphaned and keep running.
+    Both platforms group the tree the same way launch_detached grouped it
+    for detachment -- `os.killpg` targets the whole session
+    (`start_new_session=True` made pid its process group leader too);
+    `taskkill /T` walks the same tree Windows' `CREATE_NEW_PROCESS_GROUP`
+    started. Safe to call on an already-dead or unknown pid -- a no-op,
+    not an error, so callers don't need to check liveness first.
+    """
+    if pid is None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+        return
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        pass
 
 
 def is_pid_alive(pid: int | None) -> bool:
