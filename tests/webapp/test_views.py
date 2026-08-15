@@ -86,6 +86,24 @@ def test_dataset_list_shows_labeled_and_unlabeled_videos(client, repo, dataset):
     assert names == {"a.mp4", "b.mp4"}
 
 
+def test_dataset_list_paginates_the_table_but_not_the_totals(client, repo, dataset):
+    from core.paginate import PAGE_SIZE
+
+    video_dir = repo / "data" / "raw"
+    video_dir.mkdir(parents=True)
+    for i in range(PAGE_SIZE + 5):
+        (video_dir / f"v{i:03d}.mp4").write_bytes(b"x")
+
+    resp = client.get(reverse("core:dataset_list"), {"dataset": dataset.slug})
+    assert resp.status_code == 200
+    assert resp.context["total"] == PAGE_SIZE + 5  # dataset-wide, unaffected by pagination
+    assert len(resp.context["rows"]) == PAGE_SIZE
+    assert resp.context["page_obj"].paginator.num_pages == 2
+
+    resp = client.get(reverse("core:dataset_list"), {"dataset": dataset.slug, "page": 2})
+    assert len(resp.context["rows"]) == 5
+
+
 def test_dataset_list_ignores_an_unknown_dataset_slug(client, repo, dataset):
     """A ?dataset= for a slug that doesn't match any Dataset row falls back
     to the sticky session selection instead of erroring -- there's no way to
@@ -507,6 +525,20 @@ def test_extraction_list_renders_with_runs(client, repo):
 
     assert resp.status_code == 200
     assert [r.name for r in resp.context["runs"]] == ["scene1"]
+
+
+def test_extraction_list_paginates(client, repo):
+    from core.paginate import PAGE_SIZE
+
+    for i in range(PAGE_SIZE + 1):
+        _extraction_run(repo, name=f"scene{i}")
+
+    resp = client.get(reverse("core:extraction_list"))
+    assert len(resp.context["runs"]) == PAGE_SIZE
+    assert resp.context["page_obj"].paginator.num_pages == 2
+
+    resp = client.get(reverse("core:extraction_list"), {"page": 2})
+    assert len(resp.context["runs"]) == 1
 
 
 def test_extraction_detail_renders_progress_for_a_running_run(client, repo):
@@ -1063,6 +1095,69 @@ def test_review_manifest_shows_inline_error_on_invalid_submission(client, repo, 
     assert pd.read_csv(manifest_path).iloc[0]["label"] == "jump"
 
 
+def test_review_manifest_paginates_and_prefills_only_the_requested_page(client, repo, dataset):
+    from core.paginate import PAGE_SIZE
+
+    manifest_path = repo / "data" / "manifest.csv"
+    manifest_path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        {"video_path": [f"/v{i}.mp4" for i in range(PAGE_SIZE + 2)], "label": ["jump"] * (PAGE_SIZE + 2)}
+    ).to_csv(manifest_path, index=False)
+
+    resp = client.get(reverse("core:review_manifest"), {"dataset": dataset.slug})
+    assert len(resp.context["formset"].initial) == PAGE_SIZE
+    assert resp.context["formset"].initial[0]["video_path"] == "/v0.mp4"
+    assert resp.context["page_obj"].paginator.num_pages == 2
+
+    resp = client.get(reverse("core:review_manifest"), {"dataset": dataset.slug, "page": 2})
+    assert len(resp.context["formset"].initial) == 2
+    assert resp.context["formset"].initial[0]["video_path"] == f"/v{PAGE_SIZE}.mp4"
+
+
+def test_review_manifest_saving_page_2_does_not_touch_page_1_rows(client, repo, dataset):
+    from core.paginate import PAGE_SIZE
+
+    manifest_path = repo / "data" / "manifest.csv"
+    manifest_path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        {"video_path": [f"/v{i}.mp4" for i in range(PAGE_SIZE + 2)], "label": ["jump"] * (PAGE_SIZE + 2)}
+    ).to_csv(manifest_path, index=False)
+
+    # Page 2 holds rows PAGE_SIZE and PAGE_SIZE+1 (0-indexed) -- relabel both.
+    data = {
+        "dataset": dataset.slug,
+        "form-TOTAL_FORMS": "2",
+        "form-INITIAL_FORMS": "2",
+        "form-0-video_path": f"/v{PAGE_SIZE}.mp4",
+        "form-0-label": "kick",
+        "form-0-split": "",
+        "form-1-video_path": f"/v{PAGE_SIZE + 1}.mp4",
+        "form-1-label": "kick",
+        "form-1-split": "",
+    }
+    resp = client.post(f"{reverse('core:review_manifest')}?dataset={dataset.slug}&page=2", data)
+
+    assert resp.status_code == 302
+    assert "page=2" in resp.url
+    updated = pd.read_csv(manifest_path)
+    assert len(updated) == PAGE_SIZE + 2  # no rows lost
+    # every page-1 row (positions 0..PAGE_SIZE-1) is untouched
+    assert (updated.iloc[:PAGE_SIZE]["label"] == "jump").all()
+    # both page-2 rows got the new label
+    assert (updated.iloc[PAGE_SIZE:]["label"] == "kick").all()
+
+
+def test_review_manifest_out_of_range_page_clamps_instead_of_erroring(client, repo, dataset):
+    manifest_path = repo / "data" / "manifest.csv"
+    manifest_path.parent.mkdir(parents=True)
+    pd.DataFrame({"video_path": ["/a.mp4"], "label": ["jump"]}).to_csv(manifest_path, index=False)
+
+    resp = client.get(reverse("core:review_manifest"), {"dataset": dataset.slug, "page": 999})
+
+    assert resp.status_code == 200
+    assert resp.context["page_obj"].number == 1
+
+
 def test_review_manifest_shows_and_roundtrips_span_columns(client, repo, dataset):
     manifest_path = repo / "data" / "manifest.csv"
     manifest_path.parent.mkdir(parents=True)
@@ -1162,6 +1257,27 @@ def test_run_list_shows_all_runs(client, repo):
 
     assert resp.status_code == 200
     assert len(resp.context["runs"]) == 1
+
+
+def test_run_list_paginates(client, repo):
+    from core.paginate import PAGE_SIZE
+
+    for i in range(PAGE_SIZE + 3):
+        _running_run(repo, name=f"exp{i}")
+
+    resp = client.get(reverse("core:run_list"))
+    assert len(resp.context["runs"]) == PAGE_SIZE
+    assert resp.context["page_obj"].paginator.num_pages == 2
+    assert b"Page 1 of 2" in resp.content
+    assert b"?page=2" in resp.content  # {% querystring %} rendered a real link
+
+    resp = client.get(reverse("core:run_list"), {"page": 2})
+    assert len(resp.context["runs"]) == 3
+
+    # an out-of-range page clamps to the last valid one instead of erroring
+    resp = client.get(reverse("core:run_list"), {"page": 999})
+    assert resp.status_code == 200
+    assert resp.context["page_obj"].number == 2
 
 
 def test_run_detail_includes_log_tail_and_checkpoints(client, repo):
