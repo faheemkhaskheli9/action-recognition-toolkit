@@ -44,7 +44,9 @@
     </tbody>
   </table>
   </div>
-  <button type="submit" class="mt-4">Save changes</button>
+  {% include "core/_pager.html" %}
+  <p class="muted mb-2">Save applies to this page only — switch pages first if you need to edit rows elsewhere in the manifest.</p>
+  <button type="submit">Save changes</button>
 </form>
 {% else %}
   <div class="empty-state">No labels yet.</div>
