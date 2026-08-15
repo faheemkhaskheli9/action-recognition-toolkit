@@ -23,6 +23,7 @@
   </tbody>
 </table>
 </div>
+{% include "core/_pager.html" %}
 {% else %}
   <div class="empty-state">
     No training runs yet — <a href="{% url 'core:start_training' %}">start one</a> once you have labeled clips.

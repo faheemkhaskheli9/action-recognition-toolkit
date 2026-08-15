@@ -3,6 +3,28 @@
 All notable changes to this project are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Dataset table, Extraction runs, Training runs, and Review manifest now
+  paginate at 50 rows/runs per page (`core.paginate.paginate`, a thin
+  wrapper around Django's `Paginator`) instead of rendering every row at
+  once — a `Page X of Y` control with Prev/Next links
+  (`webapp/core/templates/core/_pager.html`) appears once there's more than
+  one page, using Django 5.1's `{% querystring %}` tag to preserve other
+  query params (e.g. `?dataset=<slug>`) when switching pages. Extraction
+  and Training run lists also now only call `refresh_status` (and, for
+  extraction, `clip_count`/`progress`) for the runs actually shown, not the
+  whole run history, since each check reads that run's log file. Review
+  manifest's existing client-side filter and "Save changes" both now apply
+  to the current page only — saving edits/deletions on one page only ever
+  rewrites that page's slice of the manifest, leaving every row on another
+  page untouched regardless of how many pages the manifest spans.
+
+### Changed
+- `pyproject.toml`'s `webapp` extra now requires `django>=5.1` (up from
+  `>=5.0`) for the pager's `{% querystring %}` tag.
+
 ## [1.1.0] — 2026-08-14
 
 ### Added
