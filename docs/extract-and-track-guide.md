@@ -151,7 +151,7 @@ careful, and how to avoid each:
 **Web app:** click **Import clips into dataset** on the finished run's
 detail page. This copies *every* clip the run produced — not a sample —
 into the dataset's `video_dir`
-(`services.extraction.import_clips`, [`extraction.py`](../webapp/core/services/extraction.py)),
+(`services.extraction.import_clips`, [`extraction.py`](../core/services/extraction.py)),
 flattening `output_dir/<video_stem>/trackN_winM.mp4` into
 `video_dir/<run_name>__<video_stem>__trackN_winM.mp4` (prefixed with the
 run name so two runs sharing a video stem don't collide). Clicking it

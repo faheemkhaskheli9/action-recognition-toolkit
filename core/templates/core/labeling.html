@@ -1,12 +1,11 @@
 {% extends "core/base.html" %}
 {% block title %}Label videos{% endblock %}
 {% block content %}
-<h1>Label your action recognition dataset</h1>
+<h1>Label{% if dataset %}: {{ dataset.name }}{% endif %}</h1>
 <p class="muted">
-  No videos here yet? Upload some on the <a href="{% url 'core:dataset_list' %}?dataset={{ dataset.slug }}">Dataset</a> page first.
+  No videos here yet? Upload some on the <a href="{% url 'core:dataset_list' %}?dataset={{ dataset.slug }}">Data</a> page first.
+  Switch datasets from the picker in the header above.
 </p>
-
-{% include "core/_dataset_picker.html" %}
 
 {% if not dataset %}
   <div class="empty-state">No datasets yet — <a href="{% url 'core:manage_datasets' %}">create one</a> to get started.</div>

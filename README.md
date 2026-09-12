@@ -20,13 +20,13 @@ network access once to download ImageNet/Kinetics weights.
 
 ## Web app
 
-`webapp/` is a Django app (HTML/CSS/JS front end, Python/Django back end)
-covering the whole workflow in a browser: label videos, start training runs
-(as background processes, no terminal needed), watch their live log, browse
-past runs and their checkpoints, and run inference on an uploaded video.
+`webapp/` + `core/` make up a Django app (HTML/CSS/JS front end, Python/Django
+back end) covering the whole workflow in a browser: label videos, start
+training runs (as background processes, no terminal needed), watch their live
+log, browse past runs and their checkpoints, and run inference on an uploaded
+video.
 
 ```bash
-cd webapp
 python manage.py migrate
 python manage.py createsuperuser  # first run only — every page requires login
 python manage.py runserver
@@ -82,7 +82,7 @@ app handles uploaded video and per-person track data.
 | Variable | Default | Purpose |
 |---|---|---|
 | `DJANGO_SECRET_KEY` | a fixed insecure dev key | Django's cryptographic signing key. Generate a real one (`django.core.management.utils.get_random_secret_key()`) per deployment. |
-| `DJANGO_DEBUG` | `true` | Set `false` for any non-localhost deployment. Also turns on `SECURE_SSL_REDIRECT`/`SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`/HSTS (`webapp/config/settings.py`), so only set this once the app is actually served over HTTPS behind a real web server — `runserver` itself is plain HTTP and would lock you out. |
+| `DJANGO_DEBUG` | `true` | Set `false` for any non-localhost deployment. Also turns on `SECURE_SSL_REDIRECT`/`SESSION_COOKIE_SECURE`/`CSRF_COOKIE_SECURE`/HSTS (`webapp/settings.py`), so only set this once the app is actually served over HTTPS behind a real web server — `runserver` itself is plain HTTP and would lock you out. |
 | `DJANGO_ALLOWED_HOSTS` | empty (only `runserver`'s implicit localhost) | Comma-separated hostnames, e.g. `example.com,www.example.com`. |
 
 Not configurable via environment variable, deliberate for v1.0: session/

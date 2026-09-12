@@ -1,7 +1,8 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from .views import dataset, datasets, extraction, home, inference, labeling, runs, training
+from .views import dataset, extraction, home, inference, labeling, runs, training
+from .views import datasets
 
 app_name = "core"
 

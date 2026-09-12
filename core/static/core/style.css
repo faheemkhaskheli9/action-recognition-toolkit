@@ -97,6 +97,18 @@
 }
 .skip-link:focus { left: 0; }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -144,14 +156,14 @@ a.brand:hover { color: var(--accent); }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1.5rem;
+  gap: 0.6rem 1rem;
 }
 
 .pipeline-stepper {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.3rem;
   margin: 0;
   padding: 0;
 }
@@ -163,8 +175,8 @@ a.brand:hover { color: var(--accent); }
   color: var(--muted);
   text-decoration: none;
   font-weight: 600;
-  font-size: 0.9rem;
-  padding: 0.35rem 0.75rem;
+  font-size: 0.88rem;
+  padding: 0.35rem 0.7rem;
   border-radius: 999px;
   border: 1px solid transparent;
 }
@@ -189,18 +201,58 @@ a.brand:hover { color: var(--accent); }
   opacity: 0.85;
 }
 
-.nav-secondary {
+/* Everything right of the stepper: the dataset switcher (when the current
+   page is scoped to one dataset) plus the signed-in user/logout link. Sits
+   on the same row as the stepper on wide screens (this is the one nav row
+   now -- there is no separate secondary link row any more) and wraps below
+   it, still as one collapsible block, on narrow ones. */
+.nav-end {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
   margin-left: auto;
   font-size: 0.9rem;
 }
 
-.nav-secondary a { color: var(--muted); text-decoration: none; }
-.nav-secondary a:hover { color: var(--accent); }
+.nav-end a { color: var(--muted); text-decoration: none; }
+.nav-end a:hover { color: var(--accent); }
 .nav-user { color: var(--muted); }
+
+/* ---------- Dataset switcher (header) ---------- */
+/* Every page scoped to one dataset (Data, Label, Review) reads this same
+   `dataset` GET param -- see services.datasets.resolve() -- so switching is
+   just this one control, always in the same place, instead of a separate
+   picker card buried in each page. */
+.dataset-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.3rem 0.2rem 0.75rem;
+}
+.dataset-switcher::before {
+  content: "Dataset:";
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dataset-switcher select {
+  width: auto;
+  max-width: 220px;
+  border: none;
+  background: transparent;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.dataset-switcher-manage {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
 
 @media (max-width: 720px) {
   .nav-toggle { display: inline-block; }
@@ -210,7 +262,10 @@ a.brand:hover { color: var(--accent); }
     align-items: stretch;
   }
   .site-nav.open { display: flex; }
-  .nav-secondary { margin-left: 0; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  .pipeline-stepper { gap: 0.25rem; }
+  .nav-end { margin-left: 0; flex-direction: column; align-items: stretch; gap: 0.5rem; }
+  .dataset-switcher { justify-content: space-between; }
+  .dataset-switcher select { max-width: none; flex: 1; }
 }
 
 main {
