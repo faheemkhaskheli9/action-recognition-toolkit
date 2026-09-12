@@ -23,28 +23,43 @@
     {% if user.is_authenticated %}
     <nav id="site-nav" class="site-nav" aria-label="Primary">
       <ol class="pipeline-stepper">
+        <li class="{% if step == 'dataset_list' or step == 'manage_datasets' %}active{% endif %}">
+          <a href="{% url 'core:dataset_list' %}"><span class="step-num">1</span> Data</a>
+        </li>
         <li class="{% if step == 'start_extraction' or step == 'extraction_list' or step == 'extraction_detail' %}active{% endif %}">
-          <a href="{% url 'core:start_extraction' %}"><span class="step-num">1</span> Extract</a>
+          <a href="{% url 'core:start_extraction' %}"><span class="step-num">2</span> Extract</a>
         </li>
         <li class="{% if step == 'label_videos' %}active{% endif %}">
-          <a href="{% url 'core:label_videos' %}"><span class="step-num">2</span> Label</a>
+          <a href="{% url 'core:label_videos' %}"><span class="step-num">3</span> Label</a>
         </li>
         <li class="{% if step == 'review_manifest' %}active{% endif %}">
-          <a href="{% url 'core:review_manifest' %}"><span class="step-num">3</span> Review</a>
+          <a href="{% url 'core:review_manifest' %}"><span class="step-num">4</span> Review</a>
         </li>
         <li class="{% if step == 'start_training' or step == 'run_list' or step == 'run_detail' %}active{% endif %}">
-          <a href="{% url 'core:start_training' %}"><span class="step-num">4</span> Train</a>
+          <a href="{% url 'core:start_training' %}"><span class="step-num">5</span> Train</a>
         </li>
         <li class="{% if step == 'inference' %}active{% endif %}">
-          <a href="{% url 'core:inference' %}"><span class="step-num">5</span> Infer</a>
+          <a href="{% url 'core:inference' %}"><span class="step-num">6</span> Infer</a>
         </li>
       </ol>
-      <div class="nav-secondary">
-        <a href="{% url 'core:home' %}" class="{% if step == 'home' %}fw-bold{% endif %}">Home</a>
-        <a href="{% url 'core:dataset_list' %}">Dataset</a>
-        <a href="{% url 'core:manage_datasets' %}">Manage datasets</a>
-        <a href="{% url 'core:extraction_list' %}">Extraction runs</a>
-        <a href="{% url 'core:run_list' %}">Training runs</a>
+      <div class="nav-end">
+        {% if datasets and step != 'home' %}
+          {# Global "which dataset am I working in" switcher -- shown on every
+             page that scopes its content to one dataset (Data, Label,
+             Review). Plain GET so switching is a normal page reload; each
+             view's services.datasets.resolve() reads ?dataset=<slug>. Home
+             passes `datasets` too (for its own listing) but doesn't scope to
+             one, so it's excluded here. #}
+          <form method="get" class="dataset-switcher" title="Switch dataset">
+            <label class="sr-only" for="dataset-switch">Dataset</label>
+            <select id="dataset-switch" name="dataset" onchange="this.form.submit()">
+              {% for ds in datasets %}
+                <option value="{{ ds.slug }}" {% if dataset and ds.slug == dataset.slug %}selected{% endif %}>{{ ds.name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          <a href="{% url 'core:manage_datasets' %}" class="dataset-switcher-manage" title="Create or delete datasets">Manage</a>
+        {% endif %}
         <span class="nav-user">{{ user.username }}</span>
         <a href="{% url 'core:logout' %}">Log out</a>
       </div>

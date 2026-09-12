@@ -31,14 +31,16 @@ ar-build-manifest = "action_recognition.scripts.build_manifest:main"
 ar-split-dataset = "action_recognition.scripts.split_dataset:main"
 ar-extract-tracks = "action_recognition.scripts.extract_tracks:main"
 ar-predict-scene = "action_recognition.inference.scene_predict:main"
+ar-check-setup = "action_recognition.scripts.check_setup:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-DJANGO_SETTINGS_MODULE = "config.settings"
-# webapp/ holds the Django project (config/, core/); pytest-django needs it
-# on sys.path *before* it resolves DJANGO_SETTINGS_MODULE, earlier than any
-# conftest.py runs — the `pythonpath` ini option is applied early enough.
-pythonpath = ["webapp"]
+DJANGO_SETTINGS_MODULE = "webapp.settings"
+# manage.py, the `core` app, and the `webapp` settings package all live at
+# the repo root; pytest-django needs the repo root on sys.path *before* it
+# resolves DJANGO_SETTINGS_MODULE, earlier than any conftest.py runs — the
+# `pythonpath` ini option is applied early enough.
+pythonpath = ["."]

@@ -1,9 +1,8 @@
 {% extends "core/base.html" %}
 {% block title %}Review manifest{% endblock %}
 {% block content %}
-<h1>Review / edit manifest</h1>
-
-{% include "core/_dataset_picker.html" %}
+<h1>Review{% if dataset %}: {{ dataset.name }}{% endif %}</h1>
+<p class="muted">Switch datasets from the picker in the header above.</p>
 
 {% if not dataset %}
   <div class="empty-state">No datasets yet — <a href="{% url 'core:manage_datasets' %}">create one</a> to get started.</div>

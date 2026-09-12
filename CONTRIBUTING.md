@@ -20,9 +20,9 @@ pytest tests/webapp                     # webapp-only tests
 ```
 
 Run these from the repo root — `[tool.pytest.ini_options]` in
-`pyproject.toml` sets `testpaths = ["tests"]` and `pythonpath = ["webapp"]`
-so `webapp/` (the Django project: `config/`, `core/`) is importable and
-`DJANGO_SETTINGS_MODULE = "config.settings"` resolves correctly; this has
+`pyproject.toml` sets `testpaths = ["tests"]` and `pythonpath = ["."]` so the
+repo root (where `manage.py`, `webapp/`, and `core/` all live) is importable
+and `DJANGO_SETTINGS_MODULE = "webapp.settings"` resolves correctly; this has
 to be a pytest ini option rather than fixture setup because pytest-django
 needs it earlier than any `conftest.py` runs.
 
@@ -30,7 +30,7 @@ CI (`.github/workflows/tests.yml`) runs the same `pytest` command on every
 push/PR to `master` — a green local run is the bar, and CI is that same
 bar enforced automatically.
 
-**Every change to `src/` or `webapp/core/` should land with matching test
+**Every change to `src/` or `core/` should land with matching test
 coverage**, same layout as the existing suite: library tests as
 `tests/test_<module>.py`, webapp/Django tests under
 `tests/webapp/test_<module>.py`. There's no configured lint/format command

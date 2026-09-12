@@ -28,22 +28,22 @@ pytest tests/test_models.py             # one file
 pytest tests/test_models.py::test_name  # one test
 pytest tests/webapp                     # webapp-only tests
 
-cd webapp && python manage.py migrate && python manage.py runserver
+python manage.py migrate && python manage.py runserver
 ```
 
 `pytest` is configured via `[tool.pytest.ini_options]` in `pyproject.toml`:
-`testpaths = ["tests"]`, and `pythonpath = ["webapp"]` puts the Django
-project on `sys.path` before `DJANGO_SETTINGS_MODULE = "config.settings"` is
-resolved (pytest-django needs this earlier than any `conftest.py` runs, so
-it's an ini option, not fixture setup). Run pytest from the repo root.
+`testpaths = ["tests"]`, and `pythonpath = ["."]` puts the repo root on
+`sys.path` before `DJANGO_SETTINGS_MODULE = "webapp.settings"` is resolved
+(pytest-django needs this earlier than any `conftest.py` runs, so it's an ini
+option, not fixture setup). Run pytest from the repo root.
 
 There's no configured lint/format command — match existing style rather than
 introducing a new tool.
 
-Every change to `src/` or `webapp/core/` should land with matching test
-coverage in the same layout: library tests as `tests/test_<module>.py`,
-webapp/Django tests under `tests/webapp/test_<module>.py`. Run the relevant
-file (or the full suite) before considering a change done.
+Every change to `src/` or `core/` should land with matching test coverage in
+the same layout: library tests as `tests/test_<module>.py`, webapp/Django
+tests under `tests/webapp/test_<module>.py`. Run the relevant file (or the
+full suite) before considering a change done.
 
 ### CLI entry points (`pyproject.toml` `[project.scripts]`)
 
@@ -55,6 +55,7 @@ file (or the full suite) before considering a change done.
 | `ar-build-manifest` | `action_recognition.scripts.build_manifest:main` |
 | `ar-split-dataset` | `action_recognition.scripts.split_dataset:main` |
 | `ar-extract-tracks` | `action_recognition.scripts.extract_tracks:main` |
+| `ar-check-setup` | `action_recognition.scripts.check_setup:main` |
 
 ## Pipeline (in order)
 
@@ -124,7 +125,11 @@ Checkpoints are self-contained: `save_checkpoint` writes
 loading a `.pt` (inference, resuming, the webapp) doesn't need the manifest
 or config file that produced it.
 
-### `webapp/` (Django project: `config/` settings, `core/` app)
+### Django project: `webapp/` settings package, `core/` app, root-level `manage.py`
+
+`manage.py`, the `core` app, and the `webapp` package (settings/urls/wsgi/asgi
+only — there is no separate `config/` package) all live directly at the repo
+root, alongside `src/`, `tests/`, `configs/`, `data/`, `runs/`.
 
 - `core/services/` holds the actual logic (`training.py`, `extraction.py`,
   `manifest.py`, `inference.py`); `core/views/` are thin wrappers around it.
@@ -140,11 +145,11 @@ or config file that produced it.
   `TrainingRun`/`TrackExtractionRun` (`core/models.py`) store `status`/`pid`
   as last-known values refreshed on read, not as live state.
   `settings.CONFIGS_DIR` / `RUNS_DIR` / `DATA_DIR` resolve to the repo-root
-  `configs/`, `runs/`, `data/` (`REPO_ROOT = BASE_DIR.parent` in
-  `config/settings.py`) — the webapp and CLI share these directories, nothing
-  is duplicated into `webapp/`.
-- Webapp-owned state (`db.sqlite3`, uploaded inference videos under
-  `media/`) is gitignored and lives only under `webapp/`.
+  `configs/`, `runs/`, `data/` (`REPO_ROOT = BASE_DIR` in `webapp/settings.py`,
+  since `manage.py` and `webapp/` are both at the repo root now) — the webapp
+  and CLI share these directories, nothing is duplicated elsewhere.
+- Webapp-owned state (`db.sqlite3`, uploaded inference videos under `media/`)
+  is gitignored and lives at the repo root, next to `manage.py`.
 
 ## Data conventions
 
@@ -178,7 +183,7 @@ The long-term goal is a multi-tenant SaaS shape (many users, each with their
 own datasets, labeling, training runs, and inference). **None of this is
 built.** The current design documented above — SQLite, subprocess-launched
 background jobs (not a real queue), local filesystem storage under `data/`
-and `webapp/media/`, Django's own dev server — is intentionally single-user
+and `media/`, Django's own dev server — is intentionally single-user
 and should keep working as-is; don't start migrating pieces of it toward
 this opportunistically. Getting to the multi-tenant target touches nearly
 every layer at once (data model needs per-tenant isolation, background jobs

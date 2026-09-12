@@ -63,9 +63,8 @@
   Upload videos, see what's in your dataset, and fix labels — all in one place.
   Prefer labeling one at a time? Use the
   <a href="{% url 'core:label_videos' %}?dataset={{ dataset.slug }}">Label</a> page.
+  Switch datasets, or create/delete one, from the picker in the header above.
 </p>
-
-{% include "core/_dataset_picker.html" %}
 
 {% if not dataset %}
   <div class="empty-state">No datasets yet — <a href="{% url 'core:manage_datasets' %}">create one</a> to get started.</div>

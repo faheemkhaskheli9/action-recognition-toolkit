@@ -23,5 +23,5 @@ checkpoints/
 .DS_Store
 
 # Django webapp
-webapp/db.sqlite3
-webapp/media/
+db.sqlite3
+media/
