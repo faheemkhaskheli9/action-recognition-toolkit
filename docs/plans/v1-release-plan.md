@@ -33,8 +33,9 @@ here" means:
   (env-sourced `SECRET_KEY`/`DEBUG`/`ALLOWED_HOSTS`, HSTS/secure-cookie
   settings gated on `DEBUG=False`). Also functionally complete for what the
   permissions doc asked for as a first step.
-- `DEVELOPMENT.md` picked up an **Attribution** section (no "the AI assistant" in
-  committed code/comments/git) — already in effect, nothing to do.
+- `DEVELOPMENT.md` picked up an **Attribution** section (no AI-tool
+  attribution in committed code/comments/git) — already in effect, nothing
+  to do.
 - All 146 tests pass with this work in the tree (verified before writing
   this plan). None of it is committed yet — still sitting as local changes
   on `master`.

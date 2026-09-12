@@ -1,6 +1,6 @@
-# DEVELOPMENT.md
+# Development notes
 
-This file provides guidance to this AI coding tool (this AI coding tool's site) when working with code in this repository.
+Architecture, commands, and conventions for working in this repository.
 
 ## What this is
 
@@ -195,6 +195,5 @@ design and sequence explicitly, not a background refactor.
 
 ## Attribution
 
-Do not mention "the AI assistant" anywhere in code, code comments, or git (commit
-messages, branch names, PR titles/descriptions). Keep all committed
-artifacts free of AI-attribution references.
+Keep all committed artifacts (code, code comments, commit messages, branch
+names, PR titles/descriptions) free of AI-tool attribution.
