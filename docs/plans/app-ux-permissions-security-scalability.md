@@ -184,7 +184,7 @@ every Sites/Monitoring/Identities view — same "small shared helper, applied
 consistently" shape as the existing `_background.py` liveness pattern, just
 for authorization instead of process status. Every new view in this plan
 gets a webapp test asserting a user outside the site's membership gets a
-403, per the existing CLAUDE.md coverage rule.
+403, per the existing DEVELOPMENT.md coverage rule.
 
 ### 2.4 Sensitive actions — always Admin/Site Manager + audited
 

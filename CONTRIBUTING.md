@@ -66,15 +66,12 @@ see `configs/tracking/default.yaml` for how they're selected.
 - Keep unrelated changes in separate commits — a reviewer (or a future
   `git bisect`) should be able to look at one commit and understand one
   thing.
-- Don't mention "Claude" (or other AI-attribution) anywhere in code, code
-  comments, or git history (commit messages, branch names, PR titles/
-  descriptions) — see `CLAUDE.md`'s Attribution section.
+- Keep commit messages, branch names, and PR titles/descriptions plain —
+  no tool attribution — see `DEVELOPMENT.md`'s Attribution section.
 - Add a `CHANGELOG.md` entry for anything user-visible.
 
 ## Where things are
 
-See `CLAUDE.md` for the full architecture writeup (config loading, the
+See `DEVELOPMENT.md` for the full architecture writeup (config loading, the
 registry pattern, checkpoint format, webapp service/view split, background-
-process liveness handling). It's written for both human contributors and
-AI coding assistants working in this repo — read it before making a
-non-trivial change.
+process liveness handling) — read it before making a non-trivial change.

@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 # How often (wall-clock seconds) track_video/extract_tracks_to_clips emit a
 # progress line for a video/clip loop that can otherwise run silently for a
 # long time (large source videos, many tracks) -- see extract_tracks.py's
-# module docstring / CLAUDE.md for why the webapp can only show real
+# module docstring / DEVELOPMENT.md for why the webapp can only show real
 # progress if the underlying pipeline actually logs it.
 PROGRESS_LOG_INTERVAL_SECONDS = 15.0
 

@@ -137,7 +137,7 @@ monitoring/      (phase 3) dwell time, zone occupancy, staff/customer
 ```
 
 Model contract additions (documented alongside the existing "Model
-contract" note in CLAUDE.md once built): a ReID model takes an `(C, H, W)`
+contract" note in DEVELOPMENT.md once built): a ReID model takes an `(C, H, W)`
 person crop and returns a fixed-length embedding — that's the only
 requirement to plug in a new backbone via the registry.
 
@@ -165,7 +165,7 @@ New models, additive only — nothing here changes `TrainingRun` /
   since there's no natural "exit code" for a feed that's supposed to run
   forever. Needs its own liveness pattern, analogous to but distinct from
   the existing `os.kill(pid, 0)` + exit-code-marker approach documented in
-  CLAUDE.md for finite runs.
+  DEVELOPMENT.md for finite runs.
 
 ---
 
@@ -212,7 +212,7 @@ outcome end-to-end, still on recorded footage.
 
 ### Phase 4 — Real-time streaming
 The big architectural shift, scoped deliberately (same spirit as the
-"Scaling direction" section in CLAUDE.md — not a background refactor):
+"Scaling direction" section in DEVELOPMENT.md — not a background refactor):
 - `streaming/` workers consuming RTSP/webcam sources continuously, running
   the same detect→track→embed→classify loop as `extract.py` but as a
   persistent process instead of a one-shot subprocess over a finite file.
@@ -242,7 +242,7 @@ re-ID accuracy regression suite.
 
 ---
 
-## 5. Non-goals (explicitly out of scope here, matching CLAUDE.md's existing stance)
+## 5. Non-goals (explicitly out of scope here, matching DEVELOPMENT.md's existing stance)
 
 - Multi-tenant SaaS (many independent customers/sites with isolation,
   billing, per-tenant quotas) — this plan is for one operator monitoring

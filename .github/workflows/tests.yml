@@ -21,7 +21,7 @@ jobs:
           # Keys the pip cache on pyproject.toml's dependency list so it
           # invalidates automatically when dependencies change; torch/
           # torchvision wheels are large and this is a network-heavy
-          # install otherwise (see CLAUDE.md's Install section).
+          # install otherwise (see DEVELOPMENT.md's Install section).
           cache: pip
           cache-dependency-path: pyproject.toml
 

@@ -33,8 +33,9 @@ here" means:
   (env-sourced `SECRET_KEY`/`DEBUG`/`ALLOWED_HOSTS`, HSTS/secure-cookie
   settings gated on `DEBUG=False`). Also functionally complete for what the
   permissions doc asked for as a first step.
-- `CLAUDE.md` picked up an **Attribution** section (no "Claude" in
-  committed code/comments/git) — already in effect, nothing to do.
+- `DEVELOPMENT.md` picked up an **Attribution** section (no AI-tool
+  attribution in committed code/comments/git) — already in effect, nothing
+  to do.
 - All 146 tests pass with this work in the tree (verified before writing
   this plan). None of it is committed yet — still sitting as local changes
   on `master`.
@@ -45,10 +46,10 @@ So step one of Track A is *land what's already here*, not invent new work.
 
 ## Track A — v1.0: harden the app that exists today
 
-Scope: the single-user ML tool as documented in `CLAUDE.md` and `README.md`
+Scope: the single-user ML tool as documented in `DEVELOPMENT.md` and `README.md`
 — label, extract-tracks, train, infer, both CLI and webapp. Explicitly
 **not** in scope: `Site`/`Camera`/re-ID/monitoring (that's Track B). This
-matches CLAUDE.md's existing stance that multi-tenant/scaling work is a
+matches DEVELOPMENT.md's existing stance that multi-tenant/scaling work is a
 "deliberate, separately-scoped initiative," extended here to mean the
 whole monitoring build-out too — v1.0 is "the tool works well and is safe
 to hand to someone else," not "the roadmap is further along."
@@ -63,7 +64,7 @@ to hand to someone else," not "the roadmap is further along."
      extra gate beyond Django's own staff-user flag — matches the
      permissions doc's §2.5 observation almost verbatim ("nothing stops
      someone from becoming one"). For v1.0 (still single-operator), it's
-     enough to note in `README.md`/`CLAUDE.md` that no user should be
+     enough to note in `README.md`/`DEVELOPMENT.md` that no user should be
      marked `is_staff` unless they're meant to have unmediated DB access —
      but add a one-line webapp test asserting `/admin/` still redirects an
      anonymous session to login, so the exemption in the middleware
@@ -108,11 +109,11 @@ addition:
   the test suite — confirm none of the 146 tests require CUDA; a quick
   `grep -r cuda tests/` before wiring this up is worth doing to avoid
   a false-green CI on a runner with no GPU vs. a real requirement).
-  Matches CLAUDE.md's existing "run the relevant file (or the full suite)
+  Matches DEVELOPMENT.md's existing "run the relevant file (or the full suite)
   before considering a change done" rule — CI is that rule enforced
   automatically instead of trusted by convention.
 - Cache pip/torch downloads (`actions/cache` keyed on `pyproject.toml`) —
-  torch wheels are large and CLAUDE.md already flags the install as
+  torch wheels are large and DEVELOPMENT.md already flags the install as
   network-heavy; an uncached CI run would be slow on every push.
 - Not in scope for v1.0: coverage thresholds, multi-OS/multi-Python-version
   matrix, publishing to PyPI. One green pipeline on one platform is the
@@ -162,7 +163,7 @@ target style for *new* pages:
 
 This should land as a handful of small, independently-reviewable PRs (one
 per page or per finding), each with the matching webapp test per
-CLAUDE.md's coverage rule — not one large sweep.
+DEVELOPMENT.md's coverage rule — not one large sweep.
 
 ### A6. Documentation
 
@@ -172,11 +173,11 @@ CLAUDE.md's coverage rule — not one large sweep.
   someone reading the README finds the longer-term direction instead of
   assuming the "Known limitations" section is the final word.
 - Add `CONTRIBUTING.md` covering: install command, `pytest` invocation
-  (and the `pythonpath`/`DJANGO_SETTINGS_MODULE` note from CLAUDE.md,
+  (and the `pythonpath`/`DJANGO_SETTINGS_MODULE` note from DEVELOPMENT.md,
   since it's the one non-obvious setup step), the registry pattern for
   adding a model/detector/tracker, and the Attribution rule from
-  `CLAUDE.md` restated for external contributors who won't necessarily
-  read `CLAUDE.md` itself.
+  `DEVELOPMENT.md` restated for external contributors who won't necessarily
+  read `DEVELOPMENT.md` itself.
 
 ### A7. Release checklist (do once, in order)
 
